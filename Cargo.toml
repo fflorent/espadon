@@ -1,9 +1,8 @@
 [package]
-name = "js_ast"
-version = "0.1.0"
+name = "espadon"
+version = "0.0.1"
 authors = ["Florent FAYOLLE <florent.fayolle69@gmail.com>"]
 license = "MIT"
 
 [dependencies]
 nom = "2.2.1"
-

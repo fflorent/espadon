@@ -90,18 +90,51 @@ named!(number_literal_value< &str, LiteralValue >, do_parse!(
     (LiteralValue::Number)
 ));
 
-// Largely inspired from nom (thanks to geal)
-// https://github.com/Geal/nom/blob/66128e5ccf316f60fdd55a7ae8d266f42955b00c/benches/json.rs#L51-57
-// named!(string_literal_value< &str, LiteralValue >, do_parse!(
-//     delimited!(
-//         tag!("\""),
-//         escaped!(call!(nom::alphanumeric)
-//
-// ));
+pub fn eat_string(input: &str) -> IResult< &str, &str > {
+    if input.len() == 0 {
+        return IResult::Incomplete(nom::Needed::Unknown);
+    }
+    let mut chars = input.chars();
+
+    let separator = match chars.nth(0) {
+        sep @ Some('\'') | sep @ Some('"') => sep.unwrap(),
+        Some(_) | None => return nom::IResult::Error(error_position!(ErrorKind::Custom(43), input))
+    };
+
+    let mut escaped = false;
+    let mut idx = 1;
+    for item in chars {
+        if escaped {
+            escaped = false;
+        } else {
+            match item {
+                c if c == separator => return IResult::Done(&input[idx+1..], &input[0..idx+1]),
+                '\\' => escaped = true,
+                '\n' => return IResult::Incomplete(nom::Needed::Unknown),
+                _ => ()
+            }
+        }
+        idx += 1;
+    }
+
+    return IResult::Error(error_position!(ErrorKind::Custom(43), input));
+}
+
+fn print_str<'a>(input: &'a str, string: &str) -> IResult< &'a str, &'a str > {
+    println!("{}", string);
+    IResult::Done(input, input)
+}
+
+named!(string_literal_value< &str, LiteralValue >, do_parse!(
+    string: call!(eat_string) >>
+    call!(print_str, string) >>
+    (LiteralValue::String)
+));
 
 named!(literal_value< &str, LiteralValue >, alt_complete!(
     null_literal_value |
-    number_literal_value
+    number_literal_value |
+    string_literal_value
 ));
 
 named!(literal_expression< &str, Expression >, do_parse!(
@@ -134,6 +167,8 @@ named!(statement< &str, Statement >, alt_complete!(
 named!(pub program< &str, Program >, do_parse!(
     // TODO support ASI
     body: ws!(separated_list!(tag!(";"), statement)) >>
+    // Paving the way for ASI with opt! here.
+    opt!(tag!(";")) >>
     (Program {
         body: body
     })
@@ -145,7 +180,7 @@ mod tests {
 
     #[test]
     fn it_parses_declaration_expression() {
-        assert_eq!(program("var test;").to_result(), Ok(Program {
+        assert_eq!(program("var test;"), IResult::Done("", Program {
             body: vec![
                 Statement::VariableDeclaration {
                     declarations: vec![VariableDeclarator {
@@ -160,7 +195,7 @@ mod tests {
 
     #[test]
     fn it_parses_multi_declaration_expression() {
-        assert_eq!(program("var test,\n\t foo;").to_result(), Ok(Program {
+        assert_eq!(program("var test,\n\t foo;"), IResult::Done("", Program {
             body: vec![
                 Statement::VariableDeclaration {
                     declarations: vec![VariableDeclarator {
@@ -178,7 +213,7 @@ mod tests {
 
     #[test]
     fn it_parses_multi_declaration_expression_with_initialisation() {
-        assert_eq!(program("var test = this,\n\t foo = null;").to_result(), Ok(Program {
+        assert_eq!(program("var test = this,\n\t foo = null;"), IResult::Done("", Program {
             body: vec![
                 Statement::VariableDeclaration {
                     declarations: vec![VariableDeclarator {
@@ -213,7 +248,7 @@ mod tests {
 
     #[test]
     fn it_parses_this_expression() {
-        assert_eq!(program("this;").to_result(), Ok(Program {
+        assert_eq!(program("this;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(Expression::ThisExpression)
             ]
@@ -222,7 +257,7 @@ mod tests {
 
     #[test]
     fn it_parses_null_literal_expression() {
-        assert_eq!(program("null;").to_result(), Ok(Program {
+        assert_eq!(program("null;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
                     Expression::Literal {
@@ -235,7 +270,7 @@ mod tests {
 
     #[test]
     fn it_parses_number_literal_expression() {
-        assert_eq!(program("42;   +42.042;   -42.4242;").to_result(), Ok(Program {
+        assert_eq!(program("42;   +42.042;   -42.4242;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
                     Expression::Literal {
@@ -258,7 +293,8 @@ mod tests {
 
     #[test]
     fn it_parses_string_literal_expression() {
-        assert_eq!(program("\"foo\";   'foo'; \"foo$ \\\"bar\\\"\";").to_result(), Ok(Program {
+        let res = program("\"foo\";   'foo'; \"foo$\\n \\\"bar\\\"\";");
+        assert_eq!(res, IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
                     Expression::Literal {
@@ -277,6 +313,13 @@ mod tests {
                 )
             ]
         }));
+        assert!(false);
+    }
+
+    #[test]
+    fn it_parses_incomplete_string_literal_expression() {
+        assert_eq!(program("\"foo   \r\n bar\";"), IResult::Incomplete(nom::Needed::Unknown));
+        assert_eq!(program("\"foo   \n bar\";"), IResult::Incomplete(nom::Needed::Unknown));
     }
 
 }
