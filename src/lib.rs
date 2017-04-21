@@ -1,14 +1,15 @@
 #[macro_use]
 extern crate nom;
 
-use std::str;
+use std::str::{self, FromStr};
 use nom::{IResult, ErrorKind, digit};
 
 #[derive(Debug, PartialEq)]
 pub enum LiteralValue {
     Null,
-    Number,
-    String
+    Number(f32),
+    String(String),
+    Boolean(bool)
 }
 
 #[derive(Debug, PartialEq)]
@@ -30,6 +31,14 @@ pub enum Statement {
     VariableDeclaration {
         declarations: Vec<VariableDeclarator>,
         kind: String
+    },
+    If {
+        test: Expression,
+        consequent: Box<Statement>,
+        alternate: Option<Box<Statement>>
+    },
+    Block {
+        body: Vec<Statement>
     },
     Expression(Expression)
 }
@@ -61,6 +70,33 @@ named!(variable_declarator< &str, VariableDeclarator >, do_parse!(
     })
 ));
 
+named!(if_statement< &str, Statement >, do_parse!(
+    ws!(tag!("if")) >>
+    test: delimited!(tag!("("), expression, tag!(")")) >>
+    consequent: call!(block_statement) >>
+    // opt!(complete!(…)) so it doesn't return an incomplete state
+    // FIXME: isn't there a smarter way to handle this?
+    alternate_opt: opt!(complete!(preceded!(ws!(tag!("else")), block_statement))) >>
+    (Statement::If {
+        test: test,
+        consequent: Box::new(consequent),
+        alternate: match alternate_opt {
+            Some(alternate) => Some(Box::new(alternate)),
+            None => None
+        }
+    })
+));
+
+
+named!(block_statement< &str, Statement >, map!(
+    ws!(delimited!(
+        tag!("{"),
+        call!(body),
+        tag!("}")
+    )), |body| (Statement::Block { body: body })
+));
+
+
 named!(variable_declaration_statement< &str, Statement >, do_parse!(
     var_type: tag!("var") >>
     take_while1_s!(char::is_whitespace) >>
@@ -76,21 +112,35 @@ named!(null_literal_value< &str, LiteralValue >, do_parse!(
     (LiteralValue::Null)
 ));
 
-// Largely inspired from nom (thanks to geal)
-// https://github.com/Geal/nom/blob/66128e5ccf316f60fdd55a7ae8d266f42955b00c/benches/json.rs#L23-L48
-named!(number_literal_value< &str, LiteralValue >, do_parse!(
-    pair!(
-        opt!(alt!(tag!("+") | tag!("-"))),
-        alt_complete!(
-            delimited!(digit, tag!("."), opt!(complete!(digit))) |
-            delimited!(opt!(digit), tag!("."), digit)            |
-            digit
-        )
-    ) >>
-    (LiteralValue::Number)
+named!(boolean_literal_value< &str, LiteralValue >, alt!(
+    tag!("true")  => { |_| LiteralValue::Boolean(true)  } |
+    tag!("false") => { |_| LiteralValue::Boolean(false) }
 ));
 
-pub fn eat_string(input: &str) -> IResult< &str, &str > {
+// Largely inspired from nom (thanks to geal)
+// https://github.com/Geal/nom/blob/66128e5ccf316f60fdd55a7ae8d266f42955b00c/benches/json.rs#L23-L48
+// FIXME support hexadecimal, octal and binary expressions too
+named!(number_literal_value< &str, LiteralValue >, map!(
+    pair!(
+        opt!(alt!(tag!("+") | tag!("-"))),
+        map_res!(
+            recognize!(
+                alt_complete!(
+                    delimited!(digit, tag!("."), opt!(complete!(digit))) |
+                    delimited!(opt!(digit), tag!("."), digit)            |
+                    digit
+                )
+            ),
+            FromStr::from_str
+        )
+    ),
+    |(sign, abs_value): (Option<&str>, f32)| {
+        let value = if sign == Some("-") { -abs_value } else { abs_value };
+        LiteralValue::Number(value)
+    }
+));
+
+fn eat_string(input: &str) -> IResult< &str, &str > {
     if input.len() == 0 {
         return IResult::Incomplete(nom::Needed::Unknown);
     }
@@ -120,20 +170,15 @@ pub fn eat_string(input: &str) -> IResult< &str, &str > {
     return IResult::Error(error_position!(ErrorKind::Custom(43), input));
 }
 
-fn print_str<'a>(input: &'a str, string: &str) -> IResult< &'a str, &'a str > {
-    println!("{}", string);
-    IResult::Done(input, input)
-}
-
 named!(string_literal_value< &str, LiteralValue >, do_parse!(
     string: call!(eat_string) >>
-    call!(print_str, string) >>
-    (LiteralValue::String)
+    (LiteralValue::String(string.to_string()))
 ));
 
 named!(literal_value< &str, LiteralValue >, alt_complete!(
-    null_literal_value |
     number_literal_value |
+    null_literal_value |
+    boolean_literal_value |
     string_literal_value
 ));
 
@@ -149,10 +194,10 @@ named!(this_expression< &str, Expression >, do_parse!(
     (Expression::ThisExpression)
 ));
 
-named!(expression< &str, Expression >, alt_complete!(
+named!(expression< &str, Expression >, ws!(alt_complete!(
     this_expression |
     literal_expression
-));
+)));
 
 named!(expression_statement< &str, Statement >, do_parse!(
     expression: call!(expression) >>
@@ -160,15 +205,19 @@ named!(expression_statement< &str, Statement >, do_parse!(
 ));
 
 named!(statement< &str, Statement >, alt_complete!(
-    variable_declaration_statement |
-    expression_statement
+    terminated!(variable_declaration_statement, tag!(";")) |
+    terminated!(expression_statement, tag!(";")) |
+    block_statement |
+    if_statement
+));
+
+// TODO support ASI
+named!(body< &str, Vec<Statement> >, ws!(
+    many0!(statement)
 ));
 
 named!(pub program< &str, Program >, do_parse!(
-    // TODO support ASI
-    body: ws!(separated_list!(tag!(";"), statement)) >>
-    // Paving the way for ASI with opt! here.
-    opt!(tag!(";")) >>
+    body: call!(body) >>
     (Program {
         body: body
     })
@@ -177,6 +226,7 @@ named!(pub program< &str, Program >, do_parse!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nom::{IResult, Needed};
 
     #[test]
     fn it_parses_declaration_expression() {
@@ -269,22 +319,36 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_number_literal_expression() {
+    fn it_parses_decimal_number_literal_expression() {
         assert_eq!(program("42;   +42.042;   -42.4242;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::Number
+                        value: LiteralValue::Number(42.0f32)
                     }
                 ),
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::Number
+                        value: LiteralValue::Number(42.042f32)
                     }
                 ),
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::Number
+                        value: LiteralValue::Number(-42.4242f32)
+                    }
+                )
+            ]
+        }));
+    }
+
+    // FIXME should pass…
+    #[test]
+    fn it_parses_octal_number_literal_expression() {
+        assert_eq!(program("0o10"), IResult::Done("", Program {
+            body: vec![
+                Statement::Expression(
+                    Expression::Literal {
+                        value: LiteralValue::Number(8f32)
                     }
                 )
             ]
@@ -298,28 +362,143 @@ mod tests {
             body: vec![
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::String
+                        value: LiteralValue::String("\"foo\"".to_string())
                     }
                 ),
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::String
+                        value: LiteralValue::String("'foo'".to_string())
                     }
                 ),
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::String
+                        value: LiteralValue::String("\"foo$\\n \\\"bar\\\"\"".to_string())
                     }
                 )
             ]
         }));
-        assert!(false);
     }
 
     #[test]
     fn it_parses_incomplete_string_literal_expression() {
-        assert_eq!(program("\"foo   \r\n bar\";"), IResult::Incomplete(nom::Needed::Unknown));
-        assert_eq!(program("\"foo   \n bar\";"), IResult::Incomplete(nom::Needed::Unknown));
+        assert_eq!(program("\"foo   \r\n bar\";"), IResult::Incomplete(Needed::Unknown));
+        assert_eq!(program("\"foo   \n bar\";"), IResult::Incomplete(Needed::Unknown));
+    }
+
+
+    #[test]
+    fn it_parses_boolean_literal_expression() {
+        assert_eq!(program("true; false;"), IResult::Done("", Program {
+            body: vec![
+                Statement::Expression(
+                    Expression::Literal {
+                        value: LiteralValue::Boolean(true)
+                    }
+                ),
+                Statement::Expression(
+                    Expression::Literal {
+                        value: LiteralValue::Boolean(false)
+                    }
+                )
+            ]
+        }));
+    }
+
+    #[test]
+    fn it_parses_if_statement() {
+        // FIXME test with newlines in the test. ASI shouldn't work in it.
+        // TODO
+
+        assert_eq!(program("if ( true ) {\n 42; \n 43; \n}"), IResult::Done("", Program {
+            body: vec![
+                Statement::If {
+                    test: Expression::Literal {
+                        value: LiteralValue::Boolean(true)
+                    },
+                    consequent: Box::new(Statement::Block {
+                        body: vec![
+                            Statement::Expression(
+                                Expression::Literal {
+                                    value: LiteralValue::Number(42f32)
+                                }
+                            ),
+                            Statement::Expression(
+                                Expression::Literal {
+                                    value: LiteralValue::Number(43f32)
+                                }
+                            )
+                        ]
+                    }),
+                    alternate: None
+                }
+            ]
+        }));
+    }
+
+    #[test]
+    fn it_parses_if_else_statement() {
+        // FIXME test with newlines in the test. ASI shouldn't work in it.
+        assert_eq!(program("if (true) {\n 42; 43; \n} else { 44; 45; }"), IResult::Done("", Program {
+            body: vec![
+                Statement::If {
+                    test: Expression::Literal {
+                        value: LiteralValue::Boolean(true)
+                    },
+                    consequent: Box::new(Statement::Block {
+                        body: vec![
+                            Statement::Expression(
+                                Expression::Literal {
+                                    value: LiteralValue::Number(42f32)
+                                }
+                            ),
+                            Statement::Expression(
+                                Expression::Literal {
+                                    value: LiteralValue::Number(43f32)
+                                }
+                            )
+                        ]
+                    }),
+                    alternate: Some(Box::new(Statement::Block{
+                        body: vec![
+                            Statement::Expression(
+                                Expression::Literal {
+                                    value: LiteralValue::Number(44f32)
+                                }
+                            ),
+                            Statement::Expression(
+                                Expression::Literal {
+                                    value: LiteralValue::Number(45f32)
+                                }
+                            )
+                        ]
+                    }))
+                }
+            ]
+        }));
+    }
+
+    #[test]
+    fn it_parses_block_statement() {
+        assert_eq!(program("{ true; var test; }"), IResult::Done("", Program {
+            body: vec![
+                Statement::Block {
+                    body: vec![
+                        Statement::Expression(
+                            Expression::Literal {
+                                value: LiteralValue::Boolean(true)
+                            }
+                        ),
+                        Statement::VariableDeclaration {
+                            declarations: vec![VariableDeclarator {
+                                id: "test".to_string(),
+                                init: None
+                            }],
+                            kind: "var".to_string()
+                        }
+                    ]
+                }
+            ]
+        }));
     }
 
 }
