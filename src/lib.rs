@@ -40,6 +40,7 @@ pub enum Statement {
     Block {
         body: Vec<Statement>
     },
+    Empty,
     Expression(Expression)
 }
 
@@ -87,6 +88,10 @@ named!(if_statement< &str, Statement >, do_parse!(
     })
 ));
 
+named!(empty_statement< &str, Statement >, do_parse!(
+    tag!(";") >>
+    (Statement::Empty)
+));
 
 named!(block_statement< &str, Statement >, map!(
     ws!(delimited!(
@@ -205,6 +210,7 @@ named!(expression_statement< &str, Statement >, do_parse!(
 ));
 
 named!(statement< &str, Statement >, alt_complete!(
+    empty_statement |
     terminated!(variable_declaration_statement, tag!(";")) |
     terminated!(expression_statement, tag!(";")) |
     block_statement |
@@ -499,6 +505,18 @@ mod tests {
                 }
             ]
         }));
+    }
+
+    #[test]
+    fn it_parses_empty_statement() {
+        let res = program(";");
+        let with_space = program("  ;");
+        assert_eq!(res, IResult::Done("", Program {
+            body: vec![
+                Statement::Empty
+            ]
+        }));
+        assert_eq!(with_space, res);
     }
 
 }
