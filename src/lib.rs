@@ -18,13 +18,18 @@ pub enum Expression {
     Literal {
         value: LiteralValue
     },
-    Identifier {
-        name: String
-    },
     Assignment {
         left: Box<Expression>,
         operator: String,
         right: Box<Expression>
+    },
+    Binary {
+        left: Box<Expression>,
+        operator: String,
+        right: Box<Expression>
+    },
+    Identifier {
+        name: String
     },
 }
 
@@ -211,18 +216,23 @@ named!(this_expression< &str, Expression >, do_parse!(
 ));
 
 named!(assignment_operators< &str, &str >, ws!(alt_complete!(
-    tag!("=") |
+    // order: longest to the shortest
+    // 4 chars
+    tag!(">>>=") |
+    // 3 chars
+    tag!("<<=") |
+    tag!(">>=") |
+    // 2 chars
     tag!("+=") |
     tag!("-=") |
     tag!("*=") |
     tag!("/=") |
     tag!("%=") |
-    tag!("<<=") |
-    tag!(">>=") |
-    tag!(">>>=") |
     tag!("|=") |
     tag!("^=") |
-    tag!("&=")
+    tag!("&=") |
+    // 1 char
+    tag!("=")
 )));
 
 named!(assignment_expression< &str, Expression >, do_parse!(
@@ -230,6 +240,45 @@ named!(assignment_expression< &str, Expression >, do_parse!(
     operator: assignment_operators >>
     right: expression >>
     (Expression::Assignment {
+        left: Box::new(left),
+        operator: operator.to_string(),
+        right: Box::new(right)
+    })
+));
+
+named!(binary_operators< &str, &str >, ws!(alt_complete!(
+    // order: longest to the shortest
+    tag!("instanceof") |
+    // 3 chars
+    tag!("===") |
+    tag!("!==") |
+    tag!(">>>") |
+    // 2 chars
+    tag!("in") |
+    tag!("==") |
+    tag!("!=") |
+    tag!("<=") |
+    tag!(">=") |
+    tag!("<<") |
+    tag!(">>") |
+    // 1 char
+    tag!("<") |
+    tag!(">") |
+    tag!("+") |
+    tag!("-") |
+    tag!("*") |
+    tag!("/") |
+    tag!("%") |
+    tag!("|") |
+    tag!("^") |
+    tag!("&")
+)));
+
+named!(binary_expression< &str, Expression >, do_parse!(
+    left: identifier_expression >>
+    operator: binary_operators >>
+    right: expression >>
+    (Expression::Binary {
         left: Box::new(left),
         operator: operator.to_string(),
         right: Box::new(right)
@@ -248,6 +297,7 @@ named!(expression< &str, Expression >, ws!(alt_complete!(
     this_expression |
     literal_expression |
     assignment_expression |
+    binary_expression |
     identifier_expression
 )));
 
@@ -612,4 +662,50 @@ mod tests {
             }), "should parse for {}", assignment_operator);
         }
     }
+
+    #[test]
+    fn it_parses_binary_expressions() {
+        let binary_operators = vec!["==", "!=", "===", "!==", "<", "<=", ">", ">=", "<<", ">>", ">>>", "+", "-", "*", "/", "%", "|", "^", "&", "in", "instanceof"];
+        for binary_operator in binary_operators {
+            assert_eq!(program(&format!("a {} 42;", binary_operator)), IResult::Done("", Program {
+                body: vec![
+                    Statement::Expression (
+                        Expression::Binary {
+                            operator: binary_operator.to_string(),
+                            left: Box::new(Expression::Identifier {
+                                name: "a".to_string()
+                            }),
+                            right: Box::new(Expression::Literal {
+                                value: LiteralValue::Number(42.0)
+                            })
+                        }
+                    )
+                ]
+            }), "should parse for {}", binary_operator);
+        }
+    }
+
+    // #[test]
+    // fn it_parses_for_statements_with_declaration() {
+    //     let res = program("for (var i = 0; i < 42; i+=1) undefined;");
+    //     assert_eq!(res, IResult::Done("", Program {
+    //         body: vec![
+    //             Statement::For {
+    //                 init: Statement::VariableDeclaration {
+    //                     declarations: vec![VariableDeclarator {
+    //                         id: "i".to_string(),
+    //                         init: Some(Expression::Literal {
+    //                             value: LiteralValue::Number(0)
+    //                         })
+    //                     }]
+    //                 },
+    //                 test: Statement::Expression
+    //                 Expression::Identifier {
+    //                     name: "undefined".to_string()
+    //                 }
+    //             )
+    //         ]
+    //     }));
+    // }
+
 }
