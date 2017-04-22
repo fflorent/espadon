@@ -149,16 +149,16 @@ fn eat_string(input: &str) -> IResult< &str, &str > {
     if input.len() == 0 {
         return IResult::Incomplete(nom::Needed::Unknown);
     }
-    let mut chars = input.chars();
+    let mut chars = input.char_indices();
 
     let separator = match chars.nth(0) {
-        sep @ Some('\'') | sep @ Some('"') => sep.unwrap(),
+        sep @ Some((_, '\'')) | sep @ Some((_, '"')) => sep.unwrap().1,
+        // FIXME meaningfull error codes
         Some(_) | None => return nom::IResult::Error(error_position!(ErrorKind::Custom(43), input))
     };
 
     let mut escaped = false;
-    let mut idx = 1;
-    for item in chars {
+    for (idx, item) in chars {
         if escaped {
             escaped = false;
         } else {
@@ -169,7 +169,6 @@ fn eat_string(input: &str) -> IResult< &str, &str > {
                 _ => ()
             }
         }
-        idx += 1;
     }
 
     return IResult::Error(error_position!(ErrorKind::Custom(43), input));
@@ -508,6 +507,17 @@ mod tests {
     }
 
     #[test]
+    fn it_parses_empty_block_statement() {
+        assert_eq!(program("{}"), IResult::Done("", Program {
+            body: vec![
+                Statement::Block {
+                    body: vec![]
+                }
+            ]
+        }));
+    }
+
+    #[test]
     fn it_parses_empty_statement() {
         let res = program(";");
         let with_space = program("  ;");
@@ -519,4 +529,9 @@ mod tests {
         assert_eq!(with_space, res);
     }
 
+//    fn it_parses_assignment_expression() {
+//        let assignment_operators = ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", ">>>=", "|=", "^=", "&="];
+//        for assigment_operator in assignment_operators {
+//            assert_eq!(program("a " + assignment_operators + " 42"
+//    }
 }
