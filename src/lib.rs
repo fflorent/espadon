@@ -17,7 +17,15 @@ pub enum Expression {
     ThisExpression,
     Literal {
         value: LiteralValue
-    }
+    },
+    Identifier {
+        name: String
+    },
+    Assignment {
+        left: Box<Expression>,
+        operator: String,
+        right: Box<Expression>
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,11 +61,15 @@ fn var_name_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '$'
 }
 
-named!(variable_declarator< &str, VariableDeclarator >, do_parse!(
+named!(identifier_name< &str, &str >, do_parse!(
     return_error!(ErrorKind::Custom(42), peek!(none_of!("0123456789"))) >>
-    // return_error!(ErrorKind::Custom(42), not!(tag!("1"))) >>
-    // peek!(verify!(nom::anychar, |c: char| (c.is_alphabetic() || c == '_' || c == '$'))) >>
     id: take_while1_s!(var_name_char) >>
+    (id)
+));
+
+
+named!(variable_declarator< &str, VariableDeclarator >, do_parse!(
+    id: identifier_name >>
     init: opt!(
         do_parse!(
             ws!(tag!("=")) >>
@@ -198,9 +210,45 @@ named!(this_expression< &str, Expression >, do_parse!(
     (Expression::ThisExpression)
 ));
 
+named!(assignment_operators< &str, &str >, ws!(alt_complete!(
+    tag!("=") |
+    tag!("+=") |
+    tag!("-=") |
+    tag!("*=") |
+    tag!("/=") |
+    tag!("%=") |
+    tag!("<<=") |
+    tag!(">>=") |
+    tag!(">>>=") |
+    tag!("|=") |
+    tag!("^=") |
+    tag!("&=")
+)));
+
+named!(assignment_expression< &str, Expression >, do_parse!(
+    left: identifier_expression >>
+    operator: assignment_operators >>
+    right: expression >>
+    (Expression::Assignment {
+        left: Box::new(left),
+        operator: operator.to_string(),
+        right: Box::new(right)
+    })
+));
+
+
+named!(identifier_expression < &str, Expression >, do_parse!(
+    id: identifier_name >>
+    (Expression::Identifier {
+        name: id.to_string()
+    })
+));
+
 named!(expression< &str, Expression >, ws!(alt_complete!(
     this_expression |
-    literal_expression
+    literal_expression |
+    assignment_expression |
+    identifier_expression
 )));
 
 named!(expression_statement< &str, Statement >, do_parse!(
@@ -234,7 +282,7 @@ mod tests {
     use nom::{IResult, Needed};
 
     #[test]
-    fn it_parses_declaration_expression() {
+    fn it_parses_declaration_expressions() {
         assert_eq!(program("var test;"), IResult::Done("", Program {
             body: vec![
                 Statement::VariableDeclaration {
@@ -249,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_multi_declaration_expression() {
+    fn it_parses_multi_declaration_expressions() {
         assert_eq!(program("var test,\n\t foo;"), IResult::Done("", Program {
             body: vec![
                 Statement::VariableDeclaration {
@@ -267,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_multi_declaration_expression_with_initialisation() {
+    fn it_parses_multi_declaration_expression_with_initialisations() {
         assert_eq!(program("var test = this,\n\t foo = null;"), IResult::Done("", Program {
             body: vec![
                 Statement::VariableDeclaration {
@@ -302,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_this_expression() {
+    fn it_parses_this_expressions() {
         assert_eq!(program("this;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(Expression::ThisExpression)
@@ -311,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_null_literal_expression() {
+    fn it_parses_null_literal_expressions() {
         assert_eq!(program("null;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
@@ -324,22 +372,22 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_decimal_number_literal_expression() {
+    fn it_parses_decimal_number_literal_expressions() {
         assert_eq!(program("42;   +42.042;   -42.4242;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::Number(42.0f32)
+                        value: LiteralValue::Number(42.0)
                     }
                 ),
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::Number(42.042f32)
+                        value: LiteralValue::Number(42.042)
                     }
                 ),
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::Number(-42.4242f32)
+                        value: LiteralValue::Number(-42.4242)
                     }
                 )
             ]
@@ -348,12 +396,12 @@ mod tests {
 
     // FIXME should pass…
     #[test]
-    fn it_parses_octal_number_literal_expression() {
+    fn it_parses_octal_number_literal_expressions() {
         assert_eq!(program("0o10"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
                     Expression::Literal {
-                        value: LiteralValue::Number(8f32)
+                        value: LiteralValue::Number(8.0)
                     }
                 )
             ]
@@ -361,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_string_literal_expression() {
+    fn it_parses_string_literal_expressions() {
         let res = program("\"foo\";   'foo'; \"foo$\\n \\\"bar\\\"\";");
         assert_eq!(res, IResult::Done("", Program {
             body: vec![
@@ -385,14 +433,14 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_incomplete_string_literal_expression() {
+    fn it_parses_incomplete_string_literal_expressions() {
         assert_eq!(program("\"foo   \r\n bar\";"), IResult::Incomplete(Needed::Unknown));
         assert_eq!(program("\"foo   \n bar\";"), IResult::Incomplete(Needed::Unknown));
     }
 
 
     #[test]
-    fn it_parses_boolean_literal_expression() {
+    fn it_parses_boolean_literal_expressions() {
         assert_eq!(program("true; false;"), IResult::Done("", Program {
             body: vec![
                 Statement::Expression(
@@ -410,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_if_statement() {
+    fn it_parses_if_statements() {
         // FIXME test with newlines in the test. ASI shouldn't work in it.
         // TODO
 
@@ -424,12 +472,12 @@ mod tests {
                         body: vec![
                             Statement::Expression(
                                 Expression::Literal {
-                                    value: LiteralValue::Number(42f32)
+                                    value: LiteralValue::Number(42.0)
                                 }
                             ),
                             Statement::Expression(
                                 Expression::Literal {
-                                    value: LiteralValue::Number(43f32)
+                                    value: LiteralValue::Number(43.0)
                                 }
                             )
                         ]
@@ -441,7 +489,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_if_else_statement() {
+    fn it_parses_if_else_statements() {
         // FIXME test with newlines in the test. ASI shouldn't work in it.
         assert_eq!(program("if (true) {\n 42; 43; \n} else { 44; 45; }"), IResult::Done("", Program {
             body: vec![
@@ -453,12 +501,12 @@ mod tests {
                         body: vec![
                             Statement::Expression(
                                 Expression::Literal {
-                                    value: LiteralValue::Number(42f32)
+                                    value: LiteralValue::Number(42.0)
                                 }
                             ),
                             Statement::Expression(
                                 Expression::Literal {
-                                    value: LiteralValue::Number(43f32)
+                                    value: LiteralValue::Number(43.0)
                                 }
                             )
                         ]
@@ -467,12 +515,12 @@ mod tests {
                         body: vec![
                             Statement::Expression(
                                 Expression::Literal {
-                                    value: LiteralValue::Number(44f32)
+                                    value: LiteralValue::Number(44.0)
                                 }
                             ),
                             Statement::Expression(
                                 Expression::Literal {
-                                    value: LiteralValue::Number(45f32)
+                                    value: LiteralValue::Number(45.0)
                                 }
                             )
                         ]
@@ -483,7 +531,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_block_statement() {
+    fn it_parses_block_statements() {
         assert_eq!(program("{ true; var test; }"), IResult::Done("", Program {
             body: vec![
                 Statement::Block {
@@ -507,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_empty_block_statement() {
+    fn it_parses_empty_block_statements() {
         assert_eq!(program("{}"), IResult::Done("", Program {
             body: vec![
                 Statement::Block {
@@ -518,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_empty_statement() {
+    fn it_parses_empty_statements() {
         let res = program(";");
         let with_space = program("  ;");
         assert_eq!(res, IResult::Done("", Program {
@@ -529,9 +577,39 @@ mod tests {
         assert_eq!(with_space, res);
     }
 
-//    fn it_parses_assignment_expression() {
-//        let assignment_operators = ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", ">>>=", "|=", "^=", "&="];
-//        for assigment_operator in assignment_operators {
-//            assert_eq!(program("a " + assignment_operators + " 42"
-//    }
+    #[test]
+    fn it_parses_identifiers() {
+        let res = program("undefined;");
+        assert_eq!(res, IResult::Done("", Program {
+            body: vec![
+                Statement::Expression(
+                    Expression::Identifier {
+                        name: "undefined".to_string()
+                    }
+                )
+            ]
+        }));
+    }
+
+    #[test]
+    fn it_parses_assignment_expressions() {
+        let assignment_operators = vec!["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", ">>>=", "|=", "^=", "&="];
+        for assignment_operator in assignment_operators {
+            assert_eq!(program(&format!("a {} 42;", assignment_operator)), IResult::Done("", Program {
+                body: vec![
+                    Statement::Expression (
+                        Expression::Assignment {
+                            operator: assignment_operator.to_string(),
+                            left: Box::new(Expression::Identifier {
+                                name: "a".to_string()
+                            }),
+                            right: Box::new(Expression::Literal {
+                                value: LiteralValue::Number(42.0)
+                            })
+                        }
+                    )
+                ]
+            }), "should parse for {}", assignment_operator);
+        }
+    }
 }
