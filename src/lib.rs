@@ -3,28 +3,12 @@ extern crate nom;
 
 #[macro_use] pub mod errors;
 #[cfg(test)] mod tests;
+mod misc;
 mod literals;
+mod expressions;
 pub use self::literals::{Literal, literal};
-use nom::{ErrorKind};
-
-#[derive(Debug, PartialEq)]
-pub enum Expression {
-    ThisExpression,
-    Literal(Literal),
-    Assignment {
-        left: Box<Expression>,
-        operator: String,
-        right: Box<Expression>
-    },
-    Binary {
-        left: Box<Expression>,
-        operator: String,
-        right: Box<Expression>
-    },
-    Identifier {
-        name: String
-    },
-}
+pub use self::expressions::{Expression, expression};
+use self::misc::{identifier_name};
 
 #[derive(Debug, PartialEq)]
 pub struct VariableDeclarator {
@@ -71,17 +55,6 @@ pub enum Statement {
 pub struct Program {
     pub body: Vec<Statement>
 }
-
-fn var_name_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_' || c == '$'
-}
-
-named!(identifier_name< &str, &str >, do_parse!(
-    return_error!(es_error!(INVALID_VAR_NAME), peek!(none_of!("0123456789"))) >>
-    id: take_while1_s!(var_name_char) >>
-    (id)
-));
-
 
 named!(variable_declarator< &str, VariableDeclarator >, do_parse!(
     id: identifier_name >>
@@ -165,102 +138,6 @@ named!(variable_declaration_statement< &str, Statement >, map!(
     variable_declaration,
     |var_decl| (Statement::VariableDeclaration(var_decl))
 ));
-
-named!(literal_expression< &str, Expression >, map!(
-    literal,
-    |literal| (Expression::Literal(literal))
-));
-
-named!(this_expression< &str, Expression >, do_parse!(
-    tag!("this") >>
-    (Expression::ThisExpression)
-));
-
-named!(assignment_operators< &str, &str >, ws!(alt_complete!(
-    // order: longest to the shortest
-    // 4 chars
-    tag!(">>>=") |
-    // 3 chars
-    tag!("<<=") |
-    tag!(">>=") |
-    // 2 chars
-    tag!("+=") |
-    tag!("-=") |
-    tag!("*=") |
-    tag!("/=") |
-    tag!("%=") |
-    tag!("|=") |
-    tag!("^=") |
-    tag!("&=") |
-    // 1 char
-    tag!("=")
-)));
-
-named!(assignment_expression< &str, Expression >, do_parse!(
-    left: identifier_expression >>
-    operator: assignment_operators >>
-    right: expression >>
-    (Expression::Assignment {
-        left: Box::new(left),
-        operator: operator.to_string(),
-        right: Box::new(right)
-    })
-));
-
-named!(binary_operators< &str, &str >, ws!(alt_complete!(
-    // order: longest to the shortest
-    tag!("instanceof") |
-    // 3 chars
-    tag!("===") |
-    tag!("!==") |
-    tag!(">>>") |
-    // 2 chars
-    tag!("in") |
-    tag!("==") |
-    tag!("!=") |
-    tag!("<=") |
-    tag!(">=") |
-    tag!("<<") |
-    tag!(">>") |
-    // 1 char
-    tag!("<") |
-    tag!(">") |
-    tag!("+") |
-    tag!("-") |
-    tag!("*") |
-    tag!("/") |
-    tag!("%") |
-    tag!("|") |
-    tag!("^") |
-    tag!("&")
-)));
-
-named!(binary_expression< &str, Expression >, do_parse!(
-    left: identifier_expression >>
-    operator: binary_operators >>
-    right: expression >>
-    (Expression::Binary {
-        left: Box::new(left),
-        operator: operator.to_string(),
-        right: Box::new(right)
-    })
-));
-
-
-named!(identifier_expression < &str, Expression >, do_parse!(
-    id: identifier_name >>
-    (Expression::Identifier {
-        name: id.to_string()
-    })
-));
-
-named!(expression< &str, Expression >, ws!(alt_complete!(
-    this_expression |
-    literal_expression |
-    assignment_expression |
-    binary_expression |
-    identifier_expression
-)));
 
 named!(expression_statement< &str, Statement >, do_parse!(
     expression: call!(expression) >>

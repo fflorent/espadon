@@ -3,6 +3,11 @@ use super::literals::LiteralValue;
 use nom::{IResult, Needed};
 
 mod literals;
+mod expressions;
+
+fn it_parses_expressions() {
+    assert_eq!(statement("this"), IResult::Done("", Statement::Expression(Expression::ThisExpression)));
+}
 
 #[test]
 fn it_parses_declaration_expressions() {
@@ -57,13 +62,6 @@ fn it_parses_multi_declaration_expression_with_initialisations() {
     }));
 }
 
-#[test]
-fn it_parses_statements_with_whitespaces_around() {
-    assert_eq!(program(" var test;"), program("var test;"));
-    assert_eq!(program(" var   test   ;"), program("var test;"));
-    assert_eq!(program(" var   test   ;   ").to_result(), program("var test;").to_result());
-}
-
 // skip
 // #[test]
 fn it_fails_to_parse_var_names_beginning_with_nums() {
@@ -74,19 +72,10 @@ fn it_fails_to_parse_var_names_beginning_with_nums() {
 }
 
 #[test]
-fn it_parses_this_expressions() {
-    assert_eq!(program("this;"), IResult::Done("", Program {
-        body: vec![
-            Statement::Expression(Expression::ThisExpression)
-        ]
-    }));
-}
-
-#[test]
-fn it_parses_literal_expressions() {
-    assert_eq!(literal_expression("true"), IResult::Done("", Expression::Literal(Literal {
-        value: LiteralValue::Boolean(true)
-    })));
+fn it_parses_statements_with_whitespaces_around() {
+    assert_eq!(program(" var test;"), program("var test;"));
+    assert_eq!(program(" var   test   ;"), program("var test;"));
+    assert_eq!(program(" var   test   ;   ").to_result(), program("var test;").to_result());
 }
 
 #[test]
@@ -207,64 +196,6 @@ fn it_parses_empty_statements() {
         ]
     }));
     assert_eq!(with_space, res);
-}
-
-#[test]
-fn it_parses_identifiers() {
-    let res = program("undefined;");
-    assert_eq!(res, IResult::Done("", Program {
-        body: vec![
-            Statement::Expression(
-                Expression::Identifier {
-                    name: "undefined".to_string()
-                }
-            )
-        ]
-    }));
-}
-
-#[test]
-fn it_parses_assignment_expressions() {
-    let assignment_operators = vec!["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", ">>>=", "|=", "^=", "&="];
-    for assignment_operator in assignment_operators {
-        assert_eq!(program(&format!("a {} 42;", assignment_operator)), IResult::Done("", Program {
-            body: vec![
-                Statement::Expression (
-                    Expression::Assignment {
-                        left: Box::new(Expression::Identifier {
-                            name: "a".to_string()
-                        }),
-                        operator: assignment_operator.to_string(),
-                        right: Box::new(Expression::Literal(Literal {
-                            value: LiteralValue::Number(42.0)
-                        }))
-                    }
-                )
-            ]
-        }), "should parse for {}", assignment_operator);
-    }
-}
-
-#[test]
-fn it_parses_binary_expressions() {
-    let binary_operators = vec!["==", "!=", "===", "!==", "<", "<=", ">", ">=", "<<", ">>", ">>>", "+", "-", "*", "/", "%", "|", "^", "&", "in", "instanceof"];
-    for binary_operator in binary_operators {
-        assert_eq!(program(&format!("a {} 42;", binary_operator)), IResult::Done("", Program {
-            body: vec![
-                Statement::Expression (
-                    Expression::Binary {
-                        left: Box::new(Expression::Identifier {
-                            name: "a".to_string()
-                        }),
-                        operator: binary_operator.to_string(),
-                        right: Box::new(Expression::Literal(Literal {
-                            value: LiteralValue::Number(42.0)
-                        }))
-                    }
-                )
-            ]
-        }), "should parse for {}", binary_operator);
-    }
 }
 
 #[test]
