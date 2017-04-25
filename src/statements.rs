@@ -1,44 +1,67 @@
 use expressions::{expression, Expression};
 use misc::{identifier_name};
 
+/// [A variable declarator]
+/// (https://github.com/estree/estree/blob/master/es5.md#variabledeclarator)
 #[derive(Debug, PartialEq)]
 pub struct VariableDeclarator {
     pub id: String,
     pub init: Option<Expression>
 }
 
+/// [A variable declaration]
+/// (https://github.com/estree/estree/blob/master/es5.md#variabledeclaration)
 #[derive(Debug, PartialEq)]
 pub struct VariableDeclaration {
     pub declarations: Vec<VariableDeclarator>,
     pub kind: String
 }
 
+/// A [for statement][for_statement] initializer.
+/// [for_statement]: https://github.com/estree/estree/blob/master/es5.md#forstatement
 #[derive(Debug, PartialEq)]
 pub enum ForInitializer {
     VariableDeclaration(VariableDeclaration),
     Expression(Expression)
 }
 
+/// [A statement]
+/// (https://github.com/estree/estree/blob/master/es5.md#statements)
 #[derive(Debug, PartialEq)]
 pub enum Statement {
+
     // FIXME either there is something smarted to do, or we should go for generalize it
     // everywhere
     VariableDeclaration(VariableDeclaration),
+    /// [A if statement]
+    /// (https://github.com/estree/estree/blob/master/es5.md#ifstatement)
     If {
         test: Expression,
         consequent: Box<Statement>,
         alternate: Option<Box<Statement>>
     },
+
+    /// [A for statement]
+    /// (https://github.com/estree/estree/blob/master/es5.md#forstatement)
     For {
         init: Option<ForInitializer>,
         test: Option<Expression>,
         update: Option<Expression>,
         body: Box<Statement>
     },
+
+    /// [A block statement]
+    /// (https://github.com/estree/estree/blob/master/es5.md#blockstatement)
     Block {
         body: Vec<Statement>
     },
+
+    /// [An empty statement]
+    /// (https://github.com/estree/estree/blob/master/es5.md#emptystatement)
     Empty,
+
+    /// [An expression statement]
+    /// (https://github.com/estree/estree/blob/master/es5.md#expressionstatement)
     Expression(Expression)
 }
 
@@ -104,7 +127,7 @@ named!(empty_statement< &str, Statement >, do_parse!(
 named!(block_statement< &str, Statement >, map!(
     ws!(delimited!(
         tag!("{"),
-        call!(statements_set),
+        call!(statement_list),
         tag!("}")
     )), |body| (Statement::Block { body: body })
 ));
@@ -130,6 +153,7 @@ named!(expression_statement< &str, Statement >, do_parse!(
     (Statement::Expression(expression))
 ));
 
+/// Statement parser
 named!(pub statement< &str, Statement >, alt_complete!(
     empty_statement |
     terminated!(variable_declaration_statement, tag!(";")) |
@@ -139,8 +163,8 @@ named!(pub statement< &str, Statement >, alt_complete!(
     for_statement
 ));
 
-// TODO support ASI
-named!(pub statements_set< &str, Vec<Statement> >, ws!(
+/// Statement list parser
+named!(pub statement_list< &str, Vec<Statement> >, ws!(
     many0!(statement)
 ));
 

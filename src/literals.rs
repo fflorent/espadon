@@ -1,7 +1,10 @@
 use std::str::{self, FromStr};
 use nom::{self, IResult, digit};
 
-/// Literal value
+/// [A literal value]
+/// (https://github.com/estree/estree/blob/master/es5.md#literal)
+///
+/// This has to be used with the `Literal` struct
 #[derive(Debug, PartialEq)]
 pub enum LiteralValue {
     Null,
@@ -10,8 +13,8 @@ pub enum LiteralValue {
     Boolean(bool)
 }
 
-/// Literal Expression
-/// https://github.com/estree/estree/blob/master/es5.md#literal
+/// [A literal expression]
+/// (https://github.com/estree/estree/blob/master/es5.md#literal)
 #[derive(Debug, PartialEq)]
 pub struct Literal {
     pub value: LiteralValue
@@ -85,7 +88,7 @@ fn eat_string(input: &str) -> IResult< &str, &str > {
     let mut chars = input.char_indices();
 
     let separator = match chars.nth(0) {
-        sep @ Some((_, '\'')) | sep @ Some((_, '"')) => sep.unwrap().1,
+        Some((_, sep)) if (sep == '"' || sep == '\'') => sep,
         // FIXME meaningfull error codes
         Some(_) | None => return nom::IResult::Error(error_position!(es_error!(InvalidString), input))
     };

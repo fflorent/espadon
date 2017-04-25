@@ -1,4 +1,5 @@
 use super::*;
+use statements::statement;
 
 fn check_statement(statement_to_parse: &str, exprected_statement: Statement) {
     assert_eq!(statement(statement_to_parse), IResult::Done("", exprected_statement));

@@ -6,7 +6,7 @@ mod expressions;
 mod statements;
 
 fn it_parses_multiple_statements() {
-    assert_eq!(program("var test1; 42;"), IResult::Done("", Program {
+    assert_eq!(parse("var test1; 42;"), IResult::Done("", Program {
         body: vec![
             Statement::VariableDeclaration(VariableDeclaration {
                 declarations: vec![VariableDeclarator {
@@ -24,8 +24,8 @@ fn it_parses_multiple_statements() {
 
 #[test]
 fn it_parses_statements_with_whitespaces_around() {
-    assert_eq!(program(" var test;"), program("var test;"));
-    assert_eq!(program(" var   test   ;"), program("var test;"));
-    assert_eq!(program(" var   test   ;   ").to_result(), program("var test;").to_result());
+    assert_eq!(parse(" var test;"), parse("var test;"));
+    assert_eq!(parse(" var   test   ;"), parse("var test;"));
+    assert_eq!(parse(" var   test   ;   ").to_result(), parse("var test;").to_result());
 }
 
