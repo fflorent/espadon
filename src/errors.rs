@@ -1,6 +1,6 @@
 pub enum ErrorCode {
-    INVALID_STRING,
-    INVALID_VAR_NAME
+    InvalidString,
+    InvalidVarName
 }
 
 #[macro_export]

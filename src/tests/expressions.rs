@@ -1,4 +1,5 @@
 use super::*;
+use expressions::expression;
 
 fn check_expression(expression_to_parse: &str, expected_expression: Expression) {
     assert_eq!(expression(expression_to_parse), IResult::Done("", expected_expression));
@@ -75,3 +76,7 @@ fn it_parses_binary_expressions() {
     }
 }
 
+#[test]
+fn it_trims_whitespaces() {
+    assert_eq!(expression(" this "), expression("this"));
+}

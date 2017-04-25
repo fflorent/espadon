@@ -1,5 +1,6 @@
 use super::*;
 use nom::Needed;
+use literals::literal;
 
 fn check_literal_value(literal_to_parse: &str, expected_value: LiteralValue) {
     assert_eq!(literal(literal_to_parse), IResult::Done("", Literal {

@@ -1,5 +1,5 @@
 use std::str::{self, FromStr};
-use nom::{self, IResult, ErrorKind, digit};
+use nom::{self, IResult, digit};
 
 /// Literal value
 #[derive(Debug, PartialEq)]
@@ -67,8 +67,6 @@ named!(literal_value< &str, LiteralValue >, alt_complete!(
 ));
 
 /// Literal parser
-///
-/// Should only be used internally. You may look for `literal_expression`.
 #[doc(hidden)]
 named!(pub literal< &str, Literal >, map!(
     literal_value,
@@ -89,7 +87,7 @@ fn eat_string(input: &str) -> IResult< &str, &str > {
     let separator = match chars.nth(0) {
         sep @ Some((_, '\'')) | sep @ Some((_, '"')) => sep.unwrap().1,
         // FIXME meaningfull error codes
-        Some(_) | None => return nom::IResult::Error(error_position!(es_error!(INVALID_STRING), input))
+        Some(_) | None => return nom::IResult::Error(error_position!(es_error!(InvalidString), input))
     };
 
     let mut escaped = false;
@@ -106,6 +104,6 @@ fn eat_string(input: &str) -> IResult< &str, &str > {
         }
     }
 
-    return IResult::Error(error_position!(es_error!(INVALID_STRING), input));
+    return IResult::Error(error_position!(es_error!(InvalidString), input));
 }
 
