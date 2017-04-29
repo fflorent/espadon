@@ -5,12 +5,13 @@ mod literals;
 mod expressions;
 mod statements;
 
+#[test]
 fn it_parses_multiple_statements() {
     assert_eq!(parse("var test1; 42;"), IResult::Done("", Program {
         body: vec![
             Statement::VariableDeclaration(VariableDeclaration {
                 declarations: vec![VariableDeclarator {
-                    id: "test".to_string(),
+                    id: "test1".to_string(),
                     init: None
                 }],
                 kind: "var".to_string()

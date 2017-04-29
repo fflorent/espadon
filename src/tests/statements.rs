@@ -51,15 +51,12 @@ fn it_parses_multi_declaration_expression_with_initialisations() {
     }));
 }
 
-// skip
-// #[test]
+#[test]
 fn it_fails_to_parse_var_names_beginning_with_nums() {
     let res = statement("var 1test;");
-    println!("FAIL HERE {:?}", res);
+    // FIXME it should return a meaningfull error…
     assert!(res.is_err());
-    assert!(false, "describe more!");
 }
-
 
 #[test]
 fn it_parses_if_statements() {

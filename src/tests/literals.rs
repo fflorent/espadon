@@ -3,14 +3,19 @@ use nom::Needed;
 use literals::literal;
 
 fn check_literal_value(literal_to_parse: &str, expected_value: LiteralValue) {
-    assert_eq!(literal(literal_to_parse), IResult::Done("", Literal {
-        value: expected_value
-    }));
+    check_partial_literal_value(literal_to_parse, expected_value, "");
 }
 
 fn check_incomplete_literal(literal_to_parse: &str, needed: Needed) {
     assert_eq!(literal(literal_to_parse), IResult::Incomplete(needed));
 }
+
+fn check_partial_literal_value(literal_to_parse: &str, expected_value: LiteralValue, remaining: &str) {
+    assert_eq!(literal(literal_to_parse), IResult::Done(remaining, Literal {
+        value: expected_value
+    }));
+}
+
 
 #[test]
 fn it_parses_null() {
@@ -18,16 +23,87 @@ fn it_parses_null() {
 }
 
 #[test]
-fn it_parses_decimal_number() {
+fn it_parses_decimal_numbers() {
     check_literal_value("42", LiteralValue::Number(42.0));
     check_literal_value("42.42", LiteralValue::Number(42.42));
     check_literal_value(".42", LiteralValue::Number(0.42));
 }
 
-// skip
-// #[test]
-fn it_parses_octal_number() {
+#[test]
+fn it_parses_64_bits_numbers() {
+    let max_value = std::f64::MAX;
+    check_literal_value(&max_value.to_string(), LiteralValue::Number(max_value));
+}
+
+#[test]
+fn it_parses_beyond_64_numbers_without_crash() {
+    let max_value = std::f64::MAX;
+    let mut beyond_max_value = max_value.to_string();
+    beyond_max_value.push('0');
+    check_literal_value(&beyond_max_value.to_string(), LiteralValue::Number(std::f64::INFINITY));
+}
+
+#[test]
+fn it_parses_exponent_parts_of_decimal() {
+    check_literal_value("42e3", LiteralValue::Number(42000.0));
+    check_literal_value("42.e3", LiteralValue::Number(42000.0));
+    check_literal_value("42.e+3", LiteralValue::Number(42000.0));
+    check_literal_value("42000000.e-3", LiteralValue::Number(42000.0));
+    check_literal_value(".42e5", LiteralValue::Number(42000.0));
+
+    // 03 is not considered as octal in exponent part
+    check_literal_value("42e03", LiteralValue::Number(42000.0));
+}
+
+#[test]
+fn it_fails_to_parse_invalid_exponent_parts() {
+    check_partial_literal_value("0o42e3", LiteralValue::Number(34.0), "e3");
+    check_partial_literal_value("042e3", LiteralValue::Number(34.0), "e3");
+    check_partial_literal_value("42e0o3", LiteralValue::Number(42.0), "o3");
+}
+
+#[test]
+fn it_parses_zero() {
+    check_literal_value("0", LiteralValue::Number(0.0));
+}
+
+#[test]
+fn it_parses_octal_numbers() {
     check_literal_value("0o10", LiteralValue::Number(8.0));
+    check_literal_value("0O10", LiteralValue::Number(8.0));
+    check_literal_value("010", LiteralValue::Number(8.0));
+}
+
+#[test]
+fn it_fails_to_parse_invalid_octal_numbers() {
+    check_partial_literal_value("0o777787", LiteralValue::Number(4095.0), "87");
+    check_partial_literal_value("0777787", LiteralValue::Number(4095.0), "87");
+    check_partial_literal_value("0O777787", LiteralValue::Number(4095.0), "87");
+    check_partial_literal_value("0o7777a7", LiteralValue::Number(4095.0), "a7");
+}
+
+#[test]
+fn it_parses_binary_numbers() {
+    check_literal_value("0b100", LiteralValue::Number(4.0));
+    check_literal_value("0B100", LiteralValue::Number(4.0));
+}
+
+#[test]
+fn it_fails_to_parse_invalid_binary_numbers() {
+    check_partial_literal_value("0b10021", LiteralValue::Number(4.0), "21");
+}
+
+#[test]
+fn it_parses_hexadecimal_numbers() {
+    check_literal_value("0x10", LiteralValue::Number(16.0));
+    check_literal_value("0xABCDEF", LiteralValue::Number(11259375.0));
+    check_literal_value("0xabcdef", LiteralValue::Number(11259375.0));
+    check_literal_value("0Xabcdef", LiteralValue::Number(11259375.0));
+}
+
+#[test]
+fn it_fails_to_parse_invalid_hexadecimal_numbers() {
+    check_partial_literal_value("0x7777g7", LiteralValue::Number(30583.0), "g7");
 }
 
 #[test]
