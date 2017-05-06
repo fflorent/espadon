@@ -1,15 +1,24 @@
 #[macro_use]
 extern crate nom;
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
+#[cfg(feature="position")]
+#[macro_use]
+extern crate nom_locate;
+
 #[macro_use] pub mod errors;
 #[cfg(test)] mod tests;
-mod misc;
+#[macro_use] mod misc;
 mod literals;
 mod expressions;
 mod statements;
 
 pub use self::literals::{Literal, LiteralValue};
 pub use self::expressions::Expression;
+pub use self::misc::StrSpan;
 
 pub use self::statements::{VariableDeclarator,
     VariableDeclaration,
@@ -25,8 +34,8 @@ pub use nom::IResult;
 /// (https://github.com/estree/estree/blob/master/es5.md#programs)
 ///
 /// Returned by the `parse` function.
-pub struct Program {
-    pub body: Vec<Statement>
+pub struct Program<'a> {
+    pub body: Vec<Statement<'a>>
 }
 
 named_attr!(#[doc = r#"
@@ -49,7 +58,7 @@ assert_eq!(parse("var test1; 42;"), IResult::Done("", Program {
     ]
 }));
 ```
-"#], pub parse< &str, Program >, do_parse!(
+"#], pub parse< StrSpan, Program >, do_parse!(
     body: call!(statement_list) >>
     (Program {
         body: body

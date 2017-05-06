@@ -1,5 +1,5 @@
 use super::*;
-use nom::Needed;
+use nom::{Needed, Slice, InputLength};
 use literals::literal;
 
 fn check_literal_value(literal_to_parse: &str, expected_value: LiteralValue) {
@@ -7,12 +7,20 @@ fn check_literal_value(literal_to_parse: &str, expected_value: LiteralValue) {
 }
 
 fn check_incomplete_literal(literal_to_parse: &str, needed: Needed) {
-    assert_eq!(literal(literal_to_parse), IResult::Incomplete(needed));
+    assert_eq!(literal(StrSpan::new(literal_to_parse)),
+               IResult::Incomplete(needed));
 }
 
-fn check_partial_literal_value(literal_to_parse: &str, expected_value: LiteralValue, remaining: &str) {
-    assert_eq!(literal(literal_to_parse), IResult::Done(remaining, Literal {
-        value: expected_value
+fn check_partial_literal_value(literal_to_parse: &str, expected_value: LiteralValue, remaining_str: &str) {
+    let input = StrSpan::new(literal_to_parse);
+    let remaining = input.slice((input.input_len() - remaining_str.len())..);
+    assert_eq!(remaining.fragment, remaining_str);
+    assert_eq!(literal(input), IResult::Done(remaining, Literal {
+        value: expected_value,
+        loc: Location {
+            start: input.slice(0..0),
+            end: remaining.slice(0..0)
+        }
     }));
 }
 

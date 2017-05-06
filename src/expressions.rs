@@ -1,11 +1,11 @@
 use super::literals::{Literal, literal};
-pub use super::misc::{identifier_name};
+pub use super::misc::{identifier_name, StrSpan, Location};
 
 
 #[derive(Debug, PartialEq)]
 /// [An Expression]
 /// (https://github.com/estree/estree/blob/master/es5.md#expressionstatement)
-pub enum Expression {
+pub enum Expression<'a> {
 
     /// [A this expression]
     /// (https://github.com/estree/estree/blob/master/es5.md#thisexpression)
@@ -13,7 +13,9 @@ pub enum Expression {
     /// ```ignore
     /// assert_eq!(expression("this"), IResult::Done("", Expression::This));
     /// ```
-    ThisExpression,
+    ThisExpression {
+        loc: Location<'a>,
+    },
 
     /// [A literal expression]
     /// (https://github.com/estree/estree/blob/master/es5.md#literal)
@@ -23,7 +25,7 @@ pub enum Expression {
     ///     value: LiteralValue::Number(42.0)
     /// })));
     /// ```
-    Literal(Literal),
+    Literal(Literal<'a>),
 
     /// [An assignment expression]
     /// (https://github.com/estree/estree/blob/master/es5.md#assignmentexpression)
@@ -41,9 +43,10 @@ pub enum Expression {
     /// }));
     /// ```
     Assignment {
-        left: Box<Expression>,
+        left: Box<Expression<'a>>,
         operator: String,
-        right: Box<Expression>
+        right: Box<Expression<'a>>,
+        loc: Location<'a>
     },
 
     /// [A binary expression]
@@ -62,9 +65,10 @@ pub enum Expression {
     /// }));
     /// ```
     Binary {
-        left: Box<Expression>,
+        left: Box<Expression<'a>>,
         operator: String,
-        right: Box<Expression>
+        right: Box<Expression<'a>>,
+        loc: Location<'a>
     },
 
     /// [An identifier]
@@ -76,21 +80,22 @@ pub enum Expression {
     /// }));
     /// ```
     Identifier {
-        name: String
+        name: String,
+        loc: Location<'a>
     },
 }
 
-named!(literal_expression< &str, Expression >, map!(
+named!(literal_expression< StrSpan, Expression >, map!(
     literal,
     |literal| (Expression::Literal(literal))
 ));
 
-named!(this_expression< &str, Expression >, do_parse!(
-    tag!("this") >>
-    (Expression::ThisExpression)
+named!(this_expression< StrSpan, Expression >, es_parse!({
+        tag!("this")
+    } => (Expression::ThisExpression {})
 ));
 
-named!(assignment_operators< &str, &str >, ws!(alt_complete!(
+named!(assignment_operators< StrSpan, StrSpan >, ws!(alt_complete!(
     // order: longest to the shortest
     // 4 chars
     tag!(">>>=") |
@@ -110,18 +115,18 @@ named!(assignment_operators< &str, &str >, ws!(alt_complete!(
     tag!("=")
 )));
 
-named!(assignment_expression< &str, Expression >, do_parse!(
-    left: identifier_expression >>
-    operator: assignment_operators >>
-    right: expression >>
-    (Expression::Assignment {
+named!(assignment_expression< StrSpan, Expression >, es_parse!({
+        left: identifier_expression >>
+        operator: assignment_operators >>
+        right: expression
+    } => (Expression::Assignment {
         left: Box::new(left),
         operator: operator.to_string(),
         right: Box::new(right)
     })
 ));
 
-named!(binary_operators< &str, &str >, ws!(alt_complete!(
+named!(binary_operators< StrSpan, StrSpan >, ws!(alt_complete!(
     // order: longest to the shortest
     tag!("instanceof") |
     // 3 chars
@@ -149,11 +154,11 @@ named!(binary_operators< &str, &str >, ws!(alt_complete!(
     tag!("&")
 )));
 
-named!(binary_expression< &str, Expression >, do_parse!(
-    left: identifier_expression >>
-    operator: binary_operators >>
-    right: expression >>
-    (Expression::Binary {
+named!(binary_expression< StrSpan, Expression >, es_parse!({
+        left: identifier_expression >>
+        operator: binary_operators >>
+        right: expression
+    } => (Expression::Binary {
         left: Box::new(left),
         operator: operator.to_string(),
         right: Box::new(right)
@@ -161,14 +166,14 @@ named!(binary_expression< &str, Expression >, do_parse!(
 ));
 
 
-named!(identifier_expression < &str, Expression >, do_parse!(
-    id: identifier_name >>
-    (Expression::Identifier {
+named!(identifier_expression < StrSpan, Expression >, es_parse!({
+        id: identifier_name
+    } => (Expression::Identifier {
         name: id.to_string()
     })
 ));
 
-named!(pub expression< &str, Expression >, ws!(alt_complete!(
+named!(pub expression< StrSpan, Expression >, ws!(alt_complete!(
     this_expression |
     literal_expression |
     assignment_expression |

@@ -1,100 +1,107 @@
 use expressions::{expression, Expression};
-use misc::{identifier_name};
+use misc::{identifier_name, StrSpan, Location};
 
 /// [A variable declarator]
 /// (https://github.com/estree/estree/blob/master/es5.md#variabledeclarator)
 #[derive(Debug, PartialEq)]
-pub struct VariableDeclarator {
+pub struct VariableDeclarator<'a> {
     pub id: String,
-    pub init: Option<Expression>
+    pub init: Option<Expression<'a>>,
+    pub loc: Location<'a>,
 }
 
 /// [A variable declaration]
 /// (https://github.com/estree/estree/blob/master/es5.md#variabledeclaration)
 #[derive(Debug, PartialEq)]
-pub struct VariableDeclaration {
-    pub declarations: Vec<VariableDeclarator>,
-    pub kind: String
+pub struct VariableDeclaration<'a> {
+    pub declarations: Vec<VariableDeclarator<'a>>,
+    pub kind: String,
+    pub loc: Location<'a>
 }
 
 /// A [for statement][for_statement] initializer.
 /// [for_statement]: https://github.com/estree/estree/blob/master/es5.md#forstatement
 #[derive(Debug, PartialEq)]
-pub enum ForInitializer {
-    VariableDeclaration(VariableDeclaration),
-    Expression(Expression)
+pub enum ForInitializer<'a> {
+    VariableDeclaration(VariableDeclaration<'a>),
+    Expression(Expression<'a>)
 }
 
 /// [A statement]
 /// (https://github.com/estree/estree/blob/master/es5.md#statements)
 #[derive(Debug, PartialEq)]
-pub enum Statement {
+pub enum Statement<'a> {
 
     // FIXME either there is something smarted to do, or we should go for generalize it
     // everywhere
-    VariableDeclaration(VariableDeclaration),
+    VariableDeclaration(VariableDeclaration<'a>),
     /// [A if statement]
     /// (https://github.com/estree/estree/blob/master/es5.md#ifstatement)
     If {
-        test: Expression,
-        consequent: Box<Statement>,
-        alternate: Option<Box<Statement>>
+        test: Expression<'a>,
+        consequent: Box<Statement<'a>>,
+        alternate: Option<Box<Statement<'a>>>,
+        loc: Location<'a>
     },
 
     /// [A for statement]
     /// (https://github.com/estree/estree/blob/master/es5.md#forstatement)
     For {
-        init: Option<ForInitializer>,
-        test: Option<Expression>,
-        update: Option<Expression>,
-        body: Box<Statement>
+        init: Option<ForInitializer<'a>>,
+        test: Option<Expression<'a>>,
+        update: Option<Expression<'a>>,
+        body: Box<Statement<'a>>,
+        loc: Location<'a>,
     },
 
     /// [A block statement]
     /// (https://github.com/estree/estree/blob/master/es5.md#blockstatement)
     Block {
-        body: Vec<Statement>
+        body: Vec<Statement<'a>>,
+        loc: Location<'a>
     },
 
     /// [An empty statement]
     /// (https://github.com/estree/estree/blob/master/es5.md#emptystatement)
-    Empty,
+    Empty {
+        loc: Location<'a>
+    },
 
     /// [An expression statement]
     /// (https://github.com/estree/estree/blob/master/es5.md#expressionstatement)
-    Expression(Expression)
+    Expression(Expression<'a>)
 }
 
-named!(variable_declarator< &str, VariableDeclarator >, do_parse!(
-    id: identifier_name >>
-    init: opt!(
-        do_parse!(
-            ws!(tag!("=")) >>
-            res: expression >>
-            (res)
+named!(variable_declarator< StrSpan, VariableDeclarator >, es_parse!({
+        id: identifier_name >>
+        init: opt!(
+            do_parse!(
+                ws!(tag!("=")) >>
+                res: expression >>
+                (res)
+            )
         )
-    ) >>
-    (VariableDeclarator {
+    } => (VariableDeclarator {
         id: id.to_string(),
         init: init
     })
 ));
 
-named!(for_statement< &str, Statement >, do_parse!(
-    ws!(tag!("for")) >>
-    ws!(tag!("(")) >>
-    init: alt_complete!(
-        variable_declaration    => { |var_decl| (Some(ForInitializer::VariableDeclaration(var_decl))) } |
-        expression              => { |expr| (Some(ForInitializer::Expression(expr))) } |
-        tag!("")                => { |_| (None) }
-    ) >>
-    ws!(tag!(";")) >>
-    test: opt!(expression) >>
-    ws!(tag!(";")) >>
-    update: opt!(expression) >>
-    ws!(tag!(")")) >>
-    body: statement >>
-    (Statement::For {
+named!(for_statement< StrSpan, Statement >, es_parse!({
+        ws!(tag!("for")) >>
+        ws!(tag!("(")) >>
+        init: alt!(
+            variable_declaration    => { |var_decl| (Some(ForInitializer::VariableDeclaration(var_decl))) } |
+            expression              => { |expr| (Some(ForInitializer::Expression(expr))) } |
+            tag!("")                => { |_| (None) }
+        ) >>
+        ws!(tag!(";")) >>
+        test: opt!(expression) >>
+        ws!(tag!(";")) >>
+        update: opt!(expression) >>
+        ws!(tag!(")")) >>
+        body: statement
+    } => (Statement::For {
         init: init,
         test: test,
         update: update,
@@ -102,14 +109,14 @@ named!(for_statement< &str, Statement >, do_parse!(
     })
 ));
 
-named!(if_statement< &str, Statement >, do_parse!(
-    ws!(tag!("if")) >>
-    test: delimited!(tag!("("), expression, tag!(")")) >>
-    consequent: call!(block_statement) >>
-    // opt!(complete!(…)) so it doesn't return an incomplete state
-    // FIXME: isn't there a smarter way to handle this?
-    alternate_opt: opt!(complete!(preceded!(ws!(tag!("else")), block_statement))) >>
-    (Statement::If {
+named!(if_statement< StrSpan, Statement >, es_parse!({
+        ws!(tag!("if")) >>
+        test: delimited!(tag!("("), expression, tag!(")")) >>
+        consequent: call!(block_statement) >>
+        // opt!(complete!(…)) so it doesn't return an incomplete state
+        // FIXME: isn't there a smarter way to handle this?
+        alternate_opt: opt!(complete!(preceded!(ws!(tag!("else")), block_statement)))
+    } => (Statement::If {
         test: test,
         consequent: Box::new(consequent),
         alternate: match alternate_opt {
@@ -119,42 +126,45 @@ named!(if_statement< &str, Statement >, do_parse!(
     })
 ));
 
-named!(empty_statement< &str, Statement >, do_parse!(
-    tag!(";") >>
-    (Statement::Empty)
+named!(empty_statement< StrSpan, Statement >, es_parse!(
+    {
+        tag!(";")
+    } => (Statement::Empty {})
 ));
 
-named!(block_statement< &str, Statement >, map!(
-    ws!(delimited!(
-        tag!("{"),
-        call!(statement_list),
-        tag!("}")
-    )), |body| (Statement::Block { body: body })
-));
+named!(block_statement< StrSpan, Statement >, ws!(es_parse!({
+        body: delimited!(
+            tag!("{"),
+            call!(statement_list),
+            tag!("}")
+        )
+    } => (Statement::Block { body: body })
+)));
 
 
-named!(variable_declaration< &str, VariableDeclaration >, do_parse!(
-    var_type: tag!("var") >>
-    take_while1_s!(char::is_whitespace) >>
-    declarators: ws!(separated_list!(tag!(","), variable_declarator)) >>
-    (VariableDeclaration {
+named!(variable_declaration< StrSpan, VariableDeclaration >, es_parse!(
+    {
+        var_type: tag!("var") >>
+        take_while1_s!(char::is_whitespace) >>
+        declarators: ws!(separated_list!(tag!(","), variable_declarator))
+    } => (VariableDeclaration {
         declarations: declarators,
-        kind: var_type.to_string()
+        kind: var_type.to_string(),
     })
 ));
 
-named!(variable_declaration_statement< &str, Statement >, map!(
+named!(variable_declaration_statement< StrSpan, Statement >, map!(
     variable_declaration,
     |var_decl| (Statement::VariableDeclaration(var_decl))
 ));
 
-named!(expression_statement< &str, Statement >, do_parse!(
+named!(expression_statement< StrSpan, Statement >, do_parse!(
     expression: call!(expression) >>
     (Statement::Expression(expression))
 ));
 
 /// Statement parser
-named!(pub statement< &str, Statement >, alt_complete!(
+named!(pub statement< StrSpan, Statement >, alt_complete!(
     empty_statement |
     terminated!(variable_declaration_statement, tag!(";")) |
     terminated!(expression_statement, tag!(";")) |
@@ -164,7 +174,6 @@ named!(pub statement< &str, Statement >, alt_complete!(
 ));
 
 /// Statement list parser
-named!(pub statement_list< &str, Vec<Statement> >, ws!(
+named!(pub statement_list< StrSpan, Vec<Statement> >, ws!(
     many0!(statement)
 ));
-

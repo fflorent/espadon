@@ -4,5 +4,16 @@ version = "0.0.1"
 authors = ["Florent FAYOLLE <florent.fayolle69@gmail.com>"]
 license = "MIT"
 
+[features]
+default = ["position"]
+position = ["nom_locate"]
+
 [dependencies]
-nom = "2.2.1"
+nom = "3.0.0"
+
+[dependencies.nom_locate]
+nom_locate="^0.0"
+optional = true
+
+[dev-dependencies.pretty_assertions]
+path = "crates/rust-pretty-assertions"
