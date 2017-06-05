@@ -2,20 +2,6 @@ use std::str;
 use nom::{self, IResult, digit, Slice};
 use misc::{StrSpan, Location};
 
-/// Just like opt! except that it supports eof.
-macro_rules! opt2 (
-    ($i:expr, $submac:ident!( $($args:tt)* )) => ({
-        use ::nom::InputLength;
-        match ($i).input_len() {
-            0 => ::nom::IResult::Done($i, ::std::option::Option::None),
-            _ => opt!($i, $submac!($($args)*))
-        }
-    });
-    ($i:expr, $f:expr) => (
-        opt2!($i, call!($f));
-    );
-);
-
 macro_rules! recognize2 (
     ($i:expr, $submac:ident!( $($args:tt)* )) => ({
         use nom::Offset;

@@ -410,3 +410,80 @@ fn it_parses_while_statements_with_block_body() {
         })
     });
 }
+
+#[test]
+fn it_parses_do_while_statements() {
+    check_statement("do undefined; while (i < 42)", |input| Statement::DoWhile {
+        loc: input.get_loc(..),
+        test: Box::new(Expression::Binary {
+            left: Box::new(Expression::Identifier {
+                name: "i".to_string(),
+                loc: input.get_loc("i < ".." ")
+            }),
+            operator: "<".to_string(),
+            right: Box::new(Expression::Literal(Literal {
+                value: LiteralValue::Number(42.0),
+                loc: input.get_loc("42"..")")
+            })),
+            loc: input.get_loc("i <"..")")
+        }),
+        body: Box::new(Statement::Expression(
+              Expression::Identifier {
+                  name: "undefined".to_string(),
+                  loc: input.get_loc("undefined"..";")
+              })
+        )
+    });
+}
+
+#[test]
+fn it_parses_do_while_statements_with_block_body() {
+    check_statement("do { undefined; } while (i < 42)", |input| Statement::DoWhile {
+        loc: input.get_loc(..),
+        test: Box::new(Expression::Binary {
+            left: Box::new(Expression::Identifier {
+                name: "i".to_string(),
+                loc: input.get_loc("i < ".." ")
+            }),
+            operator: "<".to_string(),
+            right: Box::new(Expression::Literal(Literal {
+                value: LiteralValue::Number(42.0),
+                loc: input.get_loc("42"..")")
+            })),
+            loc: input.get_loc("i <"..")")
+        }),
+        body: Box::new(Statement::Block {
+            body: vec![
+                Statement::Expression(Expression::Identifier {
+                    name: "undefined".to_string(),
+                    loc: input.get_loc("undefined"..";")
+                })
+            ],
+            loc: input.get_loc("{".." while")
+        })
+    });
+}
+
+#[test]
+fn it_parses_do_while_statements_with_semicolon() {
+    let statement_without_semicolon =
+        String::from("do { undefined; } while (i < 42)");
+    let statement_with_semicolon = statement_without_semicolon.clone() + ";";
+
+    let parsed_with = statement(StrSpan::new(&statement_with_semicolon));
+    let parsed_without = statement(StrSpan::new(&statement_without_semicolon));
+
+    match parsed_with {
+        IResult::Done(remaining, parsed_with_result) => {
+            assert_eq!(parsed_with_result, parsed_without.unwrap().1);
+            assert_eq!(remaining, StrSpan {
+                offset: 33,
+                line: 1,
+                fragment: ""
+            });
+        },
+        other => {
+            panic!("should parse successfully {:?}", other);
+        }
+    }
+}

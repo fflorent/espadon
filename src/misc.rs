@@ -40,3 +40,19 @@ macro_rules! es_parse {
             (position_result!(start, end, $ret {$($ret_attrs)*})))
     });
 }
+
+/// Just like opt! except that it supports eof.
+#[macro_export]
+macro_rules! opt2 (
+    ($i:expr, $submac:ident!( $($args:tt)* )) => ({
+        use ::nom::InputLength;
+        match ($i).input_len() {
+            0 => ::nom::IResult::Done($i, ::std::option::Option::None),
+            _ => opt!($i, $submac!($($args)*))
+        }
+    });
+    ($i:expr, $f:expr) => (
+        opt2!($i, call!($f));
+    );
+);
+
