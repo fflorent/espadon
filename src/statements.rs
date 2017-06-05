@@ -54,6 +54,14 @@ pub enum Statement<'a> {
         loc: Location<'a>,
     },
 
+    /// [A while statement]
+    /// (https://github.com/estree/estree/blob/master/es5.md#whilestatement)
+    While {
+        test: Box<Expression<'a>>,
+        body: Box<Statement<'a>>,
+        loc: Location<'a>
+    },
+
     /// [A block statement]
     /// (https://github.com/estree/estree/blob/master/es5.md#blockstatement)
     Block {
@@ -108,6 +116,21 @@ named!(for_statement< StrSpan, Statement >, es_parse!({
         body: Box::new(body)
     })
 ));
+
+named!(while_statement< StrSpan, Statement >, es_parse!({
+        ws!(tag!("while")) >>
+        test: ws!(delimited!(
+            tag!("("),
+            expression,
+            tag!(")")
+        )) >>
+        body: statement
+    } => (Statement::While {
+        test: Box::new(test),
+        body: Box::new(body)
+    })
+));
+
 
 named!(if_statement< StrSpan, Statement >, es_parse!({
         ws!(tag!("if")) >>
@@ -170,7 +193,8 @@ named!(pub statement< StrSpan, Statement >, alt_complete!(
     terminated!(expression_statement, tag!(";")) |
     block_statement |
     if_statement |
-    for_statement
+    for_statement |
+    while_statement
 ));
 
 /// Statement list parser

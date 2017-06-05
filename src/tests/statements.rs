@@ -357,3 +357,56 @@ fn it_parses_for_statements_with_block_body() {
         })
     });
 }
+
+#[test]
+fn it_parses_while_statements() {
+    check_statement("while (i < 42) undefined;", |input| Statement::While {
+        loc: input.get_loc(..),
+        test: Box::new(Expression::Binary {
+            left: Box::new(Expression::Identifier {
+                name: "i".to_string(),
+                loc: input.get_loc("i < ".." ")
+            }),
+            operator: "<".to_string(),
+            right: Box::new(Expression::Literal(Literal {
+                value: LiteralValue::Number(42.0),
+                loc: input.get_loc("42"..")")
+            })),
+            loc: input.get_loc("i <"..")")
+        }),
+        body: Box::new(Statement::Expression(
+              Expression::Identifier {
+                  name: "undefined".to_string(),
+                  loc: input.get_loc("undefined"..";")
+              })
+        )
+    });
+}
+
+#[test]
+fn it_parses_while_statements_with_block_body() {
+    check_statement("while (i < 42) { undefined; }", |input| Statement::While {
+        loc: input.get_loc(..),
+        test: Box::new(Expression::Binary {
+            left: Box::new(Expression::Identifier {
+                name: "i".to_string(),
+                loc: input.get_loc("i < ".." ")
+            }),
+            operator: "<".to_string(),
+            right: Box::new(Expression::Literal(Literal {
+                value: LiteralValue::Number(42.0),
+                loc: input.get_loc("42"..")")
+            })),
+            loc: input.get_loc("i <"..")")
+        }),
+        body: Box::new(Statement::Block {
+            body: vec![
+                Statement::Expression(Expression::Identifier {
+                    name: "undefined".to_string(),
+                    loc: input.get_loc("undefined"..";")
+                })
+            ],
+            loc: input.get_loc("{"..)
+        })
+    });
+}
