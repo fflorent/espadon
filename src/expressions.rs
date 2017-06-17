@@ -1,6 +1,5 @@
 use super::literals::{Literal, literal};
-pub use super::misc::{identifier_name, StrSpan, Location};
-
+pub use super::misc::{Identifier, identifier, StrSpan, Location};
 
 #[derive(Debug, PartialEq)]
 /// [An Expression]
@@ -33,9 +32,9 @@ pub enum Expression<'a> {
     ///
     /// ```ignore
     /// assert_eq!(expression("a = 42"), IResult::Done("", Expression::Assignment {
-    ///     left: Box::new(Expression::Identifier {
+    ///     left: Box::new(Expression::Identifier(Identifier {
     ///         name: "a".to_string()
-    ///     }),
+    ///     })),
     ///     operator: "=".to_string(),
     ///     right: Box::new(Expression::Literal(Literal {
     ///         value: LiteralValue::Number(42.0)
@@ -55,9 +54,9 @@ pub enum Expression<'a> {
     ///
     /// ```ignore
     /// assert_eq!(expression("a == 42"), IResult::Done("", Expression::Binary {
-    ///     left: Box::new(Expression::Identifier {
+    ///     left: Box::new(Expression::Identifier(Identifier {
     ///         name: "a".to_string()
-    ///     }),
+    ///     })),
     ///     operator: "==".to_string(),
     ///     right: Box::new(Expression::Literal(Literal {
     ///         value: LiteralValue::Number(42.0)
@@ -75,14 +74,11 @@ pub enum Expression<'a> {
     /// (https://github.com/estree/estree/blob/master/es5.md#identifier)
     ///
     /// ```ignore
-    /// assert_eq!(expression("foo"), IResult::Done("", Expression::Identifier {
+    /// assert_eq!(expression("foo"), IResult::Done("", Expression::Identifier(Identifier {
     ///     name: "foo".to_string()
-    /// }));
+    /// })));
     /// ```
-    Identifier {
-        name: String,
-        loc: Location<'a>
-    },
+    Identifier (Identifier<'a>),
 }
 
 named!(literal_expression< StrSpan, Expression >, map!(
@@ -118,7 +114,7 @@ named!(assignment_operators< StrSpan, StrSpan >, ws!(alt_complete!(
 named!(assignment_expression< StrSpan, Expression >, es_parse!({
         left: identifier_expression >>
         operator: assignment_operators >>
-        right: expression
+        right: expression_without_ws
     } => (Expression::Assignment {
         left: Box::new(left),
         operator: operator.to_string(),
@@ -166,18 +162,19 @@ named!(binary_expression< StrSpan, Expression >, es_parse!({
 ));
 
 
-named!(identifier_expression < StrSpan, Expression >, es_parse!({
-        id: identifier_name
-    } => (Expression::Identifier {
-        name: id.to_string()
-    })
+named!(identifier_expression < StrSpan, Expression >, map!(
+    identifier,
+    |identifier| Expression::Identifier(identifier)
 ));
 
-named!(pub expression< StrSpan, Expression >, ws!(alt_complete!(
+// TODO use last rust feature to limit scope
+named!(pub expression_without_ws< StrSpan, Expression >, alt_complete!(
     this_expression |
     literal_expression |
     assignment_expression |
     binary_expression |
     identifier_expression
-)));
+));
+
+named!(pub expression< StrSpan, Expression >, ws!(expression_without_ws));
 

@@ -23,6 +23,7 @@ pub use self::misc::StrSpan;
 pub use self::statements::{VariableDeclarator,
     VariableDeclaration,
     ForInitializer,
+    ForInInitializer,
     Statement
 };
 use self::statements::statement_list;

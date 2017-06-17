@@ -1,6 +1,6 @@
 use super::*;
 use nom::{IResult, InputLength};
-use misc::{StrSpan, Location};
+use misc::{Identifier, StrSpan, Location};
 use tests::utils::GetLocation;
 
 mod utils;
@@ -21,7 +21,10 @@ fn it_parses_multiple_statements() {
         body: vec![
             Statement::VariableDeclaration(VariableDeclaration {
                 declarations: vec![VariableDeclarator {
-                    id: "test1".to_string(),
+                    id: Identifier {
+                        name: "test1".to_string(),
+                        loc: input.get_loc("test1"..";")
+                    },
                     init: None,
                     loc: input.get_loc("test1"..";")
                 }],

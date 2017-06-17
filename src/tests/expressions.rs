@@ -27,10 +27,10 @@ fn it_parses_this_expressions() {
 
 #[test]
 fn it_parses_identifiers() {
-    check_expression("undefined", |input| Expression::Identifier {
+    check_expression("undefined", |input| Expression::Identifier(Identifier {
         name: "undefined".to_string(),
         loc: input.get_loc(..)
-    });
+    }));
 }
 
 #[test]
@@ -44,10 +44,10 @@ fn it_parses_assignment_expressions() {
         let expression_to_parse = format!("a {} 42", assignment_operator);
 
         check_expression(&expression_to_parse, |input| Expression::Assignment {
-            left: Box::new(Expression::Identifier {
+            left: Box::new(Expression::Identifier(Identifier {
                 name: "a".to_string(),
                 loc: input.get_loc("a".." ")
-            }),
+            })),
             operator: assignment_operator.to_string(),
             right: Box::new(Expression::Literal(Literal {
                 value: LiteralValue::Number(42.0),
@@ -69,10 +69,10 @@ fn it_parses_binary_expressions() {
         let expression_to_parse = format!("a {} 42", binary_operator);
 
         check_expression(&expression_to_parse, |input| Expression::Binary {
-            left: Box::new(Expression::Identifier {
+            left: Box::new(Expression::Identifier(Identifier {
                 name: "a".to_string(),
                 loc: input.get_loc("a".." ")
-            }),
+            })),
             operator: binary_operator.to_string(),
             right: Box::new(Expression::Literal(Literal {
                 value: LiteralValue::Number(42.0),

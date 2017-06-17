@@ -1,11 +1,11 @@
-use expressions::{expression, Expression};
-use misc::{identifier_name, StrSpan, Location};
+use expressions::{expression, expression_without_ws, Expression};
+use misc::{Identifier, identifier, StrSpan, Location};
 
 /// [A variable declarator]
 /// (https://github.com/estree/estree/blob/master/es5.md#variabledeclarator)
 #[derive(Debug, PartialEq)]
 pub struct VariableDeclarator<'a> {
-    pub id: String,
+    pub id: Identifier<'a>,
     pub init: Option<Expression<'a>>,
     pub loc: Location<'a>,
 }
@@ -25,6 +25,14 @@ pub struct VariableDeclaration<'a> {
 pub enum ForInitializer<'a> {
     VariableDeclaration(VariableDeclaration<'a>),
     Expression(Expression<'a>)
+}
+
+/// A [for in statement][for_in_statement] initializer.
+/// [for_in_statement]: https://github.com/estree/estree/blob/master/es5.md#forinstatement
+#[derive(Debug, PartialEq)]
+pub enum ForInInitializer<'a> {
+    VariableDeclaration(VariableDeclaration<'a>),
+    Identifier(Identifier<'a>)
 }
 
 /// [A statement]
@@ -52,6 +60,15 @@ pub enum Statement<'a> {
         update: Option<Expression<'a>>,
         body: Box<Statement<'a>>,
         loc: Location<'a>,
+    },
+
+    /// [A for statement]
+    /// (https://github.com/estree/estree/blob/master/es5.md#forstatement)
+    ForIn {
+        left: Box<ForInInitializer<'a>>,
+        right: Box<Expression<'a>>,
+        body: Box<Statement<'a>>,
+        loc: Location<'a>
     },
 
     /// [A while statement]
@@ -88,21 +105,6 @@ pub enum Statement<'a> {
     Expression(Expression<'a>)
 }
 
-named!(variable_declarator< StrSpan, VariableDeclarator >, es_parse!({
-        id: identifier_name >>
-        init: opt!(
-            do_parse!(
-                ws!(tag!("=")) >>
-                res: expression >>
-                (res)
-            )
-        )
-    } => (VariableDeclarator {
-        id: id.to_string(),
-        init: init
-    })
-));
-
 named!(for_statement< StrSpan, Statement >, es_parse!({
         ws!(tag!("for")) >>
         ws!(tag!("(")) >>
@@ -121,6 +123,26 @@ named!(for_statement< StrSpan, Statement >, es_parse!({
         init: init,
         test: test,
         update: update,
+        body: Box::new(body)
+    })
+));
+
+named!(for_in_statement< StrSpan, Statement >, es_parse!({
+        ws!(tag!("for")) >>
+        ws!(tag!("(")) >>
+        left: alt!(
+            variable_declaration    => { |var_decl| (ForInInitializer::VariableDeclaration(var_decl)) } |
+            identifier              => { |id| (ForInInitializer::Identifier(id)) }
+        ) >>
+        dbg!(take_while1_s!(char::is_whitespace)) >>
+        tag!("in") >>
+        take_while1_s!(char::is_whitespace) >>
+        right: expression >>
+        ws!(tag!(")")) >>
+        body: statement
+    } => (Statement::ForIn {
+        left: Box::new(left),
+        right: Box::new(right),
         body: Box::new(body)
     })
 ));
@@ -187,12 +209,26 @@ named!(block_statement< StrSpan, Statement >, ws!(es_parse!({
     } => (Statement::Block { body: body })
 )));
 
+named!(variable_declarator< StrSpan, VariableDeclarator >, es_parse!({
+        id: identifier >>
+        init: opt!(
+            do_parse!(
+                ws!(tag!("=")) >>
+                res: expression_without_ws >>
+                (res)
+            )
+        )
+    } => (VariableDeclarator {
+        id: id,
+        init: init
+    })
+));
 
 named!(variable_declaration< StrSpan, VariableDeclaration >, es_parse!(
     {
         var_type: tag!("var") >>
         take_while1_s!(char::is_whitespace) >>
-        declarators: ws!(separated_list!(tag!(","), variable_declarator))
+        declarators: separated_list!(ws!(tag!(",")), variable_declarator)
     } => (VariableDeclaration {
         declarations: declarators,
         kind: var_type.to_string(),
@@ -200,7 +236,7 @@ named!(variable_declaration< StrSpan, VariableDeclaration >, es_parse!(
 ));
 
 named!(variable_declaration_statement< StrSpan, Statement >, map!(
-    variable_declaration,
+    ws!(variable_declaration),
     |var_decl| (Statement::VariableDeclaration(var_decl))
 ));
 
@@ -210,18 +246,17 @@ named!(expression_statement< StrSpan, Statement >, do_parse!(
 ));
 
 /// Statement parser
-named!(pub statement< StrSpan, Statement >, alt_complete!(
+named!(pub statement< StrSpan, Statement >, ws!(alt_complete!(
     empty_statement |
     terminated!(variable_declaration_statement, tag!(";")) |
     terminated!(expression_statement, tag!(";")) |
     block_statement |
     if_statement |
     for_statement |
+    for_in_statement |
     while_statement |
     terminated!(do_while_statement, opt2!(tag!(";")))
-));
+)));
 
 /// Statement list parser
-named!(pub statement_list< StrSpan, Vec<Statement> >, ws!(
-    many0!(statement)
-));
+named!(pub statement_list< StrSpan, Vec<Statement> >, many0!(statement));
