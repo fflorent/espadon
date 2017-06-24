@@ -85,6 +85,40 @@ fn it_parses_binary_expressions() {
 }
 
 #[test]
+fn it_parses_array_expressions() {
+    check_expression("[]", |input| Expression::Array {
+        elements: vec![],
+        loc: input.get_loc(..)
+    });
+
+    check_expression("[foo, a = b, 42]", |input| Expression::Array {
+        elements: vec![
+            Expression::Identifier(Identifier {
+                name: "foo".to_string(),
+                loc: input.get_loc("foo"..",")
+            }),
+            Expression::Assignment {
+                left: Box::new(Expression::Identifier(Identifier {
+                    name: "a".to_string(),
+                    loc: input.get_loc("a".." ")
+                })),
+                operator: "=".to_string(),
+                right: Box::new(Expression::Identifier(Identifier {
+                    name: "b".to_string(),
+                    loc: input.get_loc("b"..",")
+                })),
+                loc: input.get_loc("a"..",")
+            },
+            Expression::Literal(Literal {
+                value: LiteralValue::Number(42.0),
+                loc: input.get_loc("42".."]")
+            }),
+        ],
+        loc: input.get_loc(..)
+    });
+}
+
+#[test]
 fn it_ignores_whitespaces() {
     check_expression(" this ", |input| Expression::ThisExpression {
         loc: input.get_loc("t".." ")

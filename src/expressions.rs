@@ -79,6 +79,41 @@ pub enum Expression<'a> {
     /// })));
     /// ```
     Identifier (Identifier<'a>),
+
+    /// [An array expression]
+    /// (https://github.com/estree/estree/blob/master/es5.md#arrayexpression)
+    ///
+    /// ```ignore
+    /// assert_eq!(expression("[foo, a = b, 42]", |input| Expression::Array {
+    ///     elements: vec![
+    ///         Expression::Identifier(Identifier {
+    ///             name: "foo".to_string(),
+    ///             loc: input.get_loc("foo"..",")
+    ///         }),
+    ///         Expression::Assignment {
+    ///             left: Box::new(Expression::Identifier(Identifier {
+    ///                 name: "a".to_string(),
+    ///                 loc: input.get_loc("a".." ")
+    ///             })),
+    ///             operator: "=".to_string(),
+    ///             right: Box::new(Expression::Identifier(Identifier {
+    ///                 name: "b".to_string(),
+    ///                 loc: input.get_loc("b"..",")
+    ///             })),
+    ///             loc: input.get_loc("a"..",")
+    ///         },
+    ///         Expression::Literal(Literal {
+    ///             value: LiteralValue::Number(42.0),
+    ///             loc: input.get_loc("42".."]")
+    ///         }),
+    ///     ],
+    ///     loc: input.get_loc(..)
+    /// });
+    /// ```
+    Array {
+        elements: Vec<Expression<'a>>,
+        loc: Location<'a>
+    }
 }
 
 named!(literal_expression< StrSpan, Expression >, map!(
@@ -167,13 +202,24 @@ named!(identifier_expression < StrSpan, Expression >, map!(
     |identifier| Expression::Identifier(identifier)
 ));
 
-// TODO use last rust feature to limit scope
+named!(array_expression< StrSpan, Expression >, es_parse!({
+        elements: delimited!(
+            tag!("["),
+            separated_list!(tag!(","), expression),
+            tag!("]")
+        )
+    } => (Expression::Array {
+        elements: elements
+    })
+));
+
 named!(pub expression_without_ws< StrSpan, Expression >, alt_complete!(
     this_expression |
     literal_expression |
     assignment_expression |
     binary_expression |
-    identifier_expression
+    identifier_expression |
+    array_expression
 ));
 
 named!(pub expression< StrSpan, Expression >, ws!(expression_without_ws));
