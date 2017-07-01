@@ -1,5 +1,5 @@
 use super::*;
-use expressions::expression;
+use expressions::{expression, Property, PropertyKey};
 use nom::Slice;
 use tests::utils::GetLocation;
 
@@ -113,6 +113,50 @@ fn it_parses_array_expressions() {
                 value: LiteralValue::Number(42.0),
                 loc: input.get_loc("42".."]")
             }),
+        ],
+        loc: input.get_loc(..)
+    });
+}
+
+#[test]
+fn it_parses_object_expressions() {
+    check_expression("{}", |input| Expression::Object {
+        properties: vec![],
+        loc: input.get_loc(..)
+    });
+
+    check_expression("{foo: 'bar'}", |input| Expression::Object {
+        properties: vec![
+            Property {
+                key: PropertyKey::Identifier(Identifier {
+                    name: "foo".to_string(),
+                    loc: input.get_loc("foo"..":"),
+                }),
+                value: Expression::Literal(Literal {
+                    value: LiteralValue::String("'bar'".to_string()),
+                    loc: input.get_loc("'bar'".."}"),
+                }),
+                kind: "init".to_string(),
+                loc: input.get_loc("foo".."}")
+            }
+        ],
+        loc: input.get_loc(..)
+    });
+
+    check_expression("{42: 'bar'}", |input| Expression::Object {
+        properties: vec![
+            Property {
+                key: PropertyKey::Literal(Literal {
+                    value: LiteralValue::Number(42.0),
+                    loc: input.get_loc("42"..":"),
+                }),
+                value: Expression::Literal(Literal {
+                    value: LiteralValue::String("'bar'".to_string()),
+                    loc: input.get_loc("'bar'".."}"),
+                }),
+                kind: "init".to_string(),
+                loc: input.get_loc("42".."}")
+            }
         ],
         loc: input.get_loc(..)
     });

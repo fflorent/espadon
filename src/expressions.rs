@@ -2,6 +2,24 @@ use super::literals::{Literal, literal};
 pub use super::misc::{Identifier, identifier, StrSpan, Location};
 
 #[derive(Debug, PartialEq)]
+/// [An object property]
+/// (https://github.com/estree/estree/blob/master/es5.md#property)
+pub struct Property<'a> {
+    pub key: PropertyKey<'a>,
+    pub value: Expression<'a>,
+    pub kind: String,
+    pub loc: Location<'a>
+}
+
+#[derive(Debug, PartialEq)]
+/// An object property key
+/// Can be either a literal or an identifier
+pub enum PropertyKey<'a> {
+    Identifier(Identifier<'a>),
+    Literal(Literal<'a>)
+}
+
+#[derive(Debug, PartialEq)]
 /// [An Expression]
 /// (https://github.com/estree/estree/blob/master/es5.md#expressionstatement)
 pub enum Expression<'a> {
@@ -113,7 +131,37 @@ pub enum Expression<'a> {
     Array {
         elements: Vec<Expression<'a>>,
         loc: Location<'a>
-    }
+    },
+
+    // FIXME remove ignore in documentation
+    /// [An object expression]
+    /// (https://github.com/estree/estree/blob/master/es5.md#objectexpression)
+    ///
+    /// TODO
+    /// ```ignore
+    /// assert_eq!("{42: 'bar'}", |input| Expression::Object {
+    ///     properties: vec![
+    ///         Property {
+    ///             key: PropertyKey::Literal(Literal {
+    ///                 value: LiteralValue::Number(42.0),
+    ///                 loc: input.get_loc("42"..":"),
+    ///             }),
+    ///             value: Expression::Literal(Literal {
+    ///                 value: LiteralValue::String("'bar'".to_string()),
+    ///                 loc: input.get_loc("'bar'".."}"),
+    ///             }),
+    ///             kind: "init".to_string(),
+    ///             loc: input.get_loc("42".."}")
+    ///         }
+    ///     ],
+    ///     loc: input.get_loc(..)
+    /// });
+    /// ```
+
+    Object {
+        properties: Vec<Property<'a>>,
+        loc: Location<'a>
+    },
 }
 
 named!(literal_expression< StrSpan, Expression >, map!(
@@ -213,13 +261,41 @@ named!(array_expression< StrSpan, Expression >, es_parse!({
     })
 ));
 
+named!(property< StrSpan, Property >, es_parse!({
+        key: alt!(
+            identifier => { |ident| (PropertyKey::Identifier(ident)) } |
+            literal => { |lit| (PropertyKey::Literal(lit)) }
+        ) >>
+        ws!(tag!(":")) >>
+        value: expression
+    } => (Property {
+        key: key,
+        value: value,
+        kind: "init".to_string()
+    })
+));
+
+
+
+named!(object_expression< StrSpan, Expression >, es_parse!({
+        properties: delimited!(
+            tag!("{"),
+            separated_list!(tag!(","), property),
+            tag!("}")
+        )
+    } => (Expression::Object {
+        properties: properties
+    })
+));
+
 named!(pub expression_without_ws< StrSpan, Expression >, alt_complete!(
     this_expression |
     literal_expression |
     assignment_expression |
     binary_expression |
     identifier_expression |
-    array_expression
+    array_expression |
+    object_expression
 ));
 
 named!(pub expression< StrSpan, Expression >, ws!(expression_without_ws));
