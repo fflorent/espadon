@@ -15,5 +15,5 @@ nom = "^3.1"
 version = "^0.1"
 optional = true
 
-[dev-dependencies.pretty_assertions]
-path = "crates/rust-pretty-assertions"
+[dev-dependencies]
+pretty_assertions = "^0.4"
