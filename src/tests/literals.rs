@@ -137,6 +137,16 @@ fn it_parses_strings_with_escaped_quotes() {
 }
 
 #[test]
+fn it_parses_strings_with_escaped_codepoint() {
+    check_literal_value("\"foo\\u0020bar\"",
+                        LiteralValue::String("foo bar".to_string()));
+    check_literal_value("\"foo\\u{20}bar\"",
+                        LiteralValue::String("foo bar".to_string()));
+    check_literal_value("\"foo\\u{000000000000020}bar\"",
+                        LiteralValue::String("foo bar".to_string()));
+}
+
+#[test]
 fn it_parses_incomplete_string() {
     check_incomplete_literal("\"foo   \r\n bar\";", Needed::Unknown);
     check_incomplete_literal("\"foo   \n bar\";", Needed::Unknown);
