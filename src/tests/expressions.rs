@@ -133,7 +133,7 @@ fn it_parses_object_expressions() {
                     loc: input.get_loc("foo"..":"),
                 }),
                 value: Expression::Literal(Literal {
-                    value: LiteralValue::String("'bar'".to_string()),
+                    value: LiteralValue::String("bar".to_string()),
                     loc: input.get_loc("'bar'".."}"),
                 }),
                 kind: "init".to_string(),
@@ -151,7 +151,7 @@ fn it_parses_object_expressions() {
                     loc: input.get_loc("42"..":"),
                 }),
                 value: Expression::Literal(Literal {
-                    value: LiteralValue::String("'bar'".to_string()),
+                    value: LiteralValue::String("bar".to_string()),
                     loc: input.get_loc("'bar'".."}"),
                 }),
                 kind: "init".to_string(),

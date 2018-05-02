@@ -163,7 +163,8 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
 
     let mut escaped = false;
     let mut unescaped_string = String::new();
-    for (idx, item) in chars {
+
+    while let Some((idx, item)) = chars.next() {
         if escaped {
             escaped = false;
             unescaped_string.push(item);
