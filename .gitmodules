@@ -1,3 +1,0 @@
-[submodule "crates/rust-pretty-assertions"]
-	path = crates/rust-pretty-assertions
-	url = https://github.com/fflorent/rust-pretty-assertions
