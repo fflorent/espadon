@@ -1,4 +1,3 @@
-use std::str;
 use nom::{self, IResult, digit, Slice};
 use misc::{StrSpan, Location};
 
@@ -149,7 +148,7 @@ named!(pub literal< StrSpan, Literal >, es_parse!({
 // ==================================================================
 
 /// Returns a whole string (with its delimiters), escaping the backslashes
-fn eat_string(located_span: StrSpan) -> IResult< StrSpan, &str > {
+fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
     let string = located_span.fragment;
     if string.len() == 0 {
         return IResult::Incomplete(nom::Needed::Unknown);
@@ -163,15 +162,17 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, &str > {
     };
 
     let mut escaped = false;
+    let mut unescaped_string = String::new();
     for (idx, item) in chars {
         if escaped {
             escaped = false;
+            unescaped_string.push(item);
         } else {
             match item {
-                c if c == separator => return IResult::Done(located_span.slice(idx+1..), string.slice(0..idx+1)),
+                c if c == separator => return IResult::Done(located_span.slice(idx+1..), unescaped_string),
                 '\\' => escaped = true,
                 '\n' => return IResult::Incomplete(nom::Needed::Unknown),
-                _ => ()
+                _ => unescaped_string.push(item),
             }
         }
     }

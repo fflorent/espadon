@@ -133,7 +133,7 @@ fn it_parses_strings_with_escaped_quotes() {
     let string_to_test = "\"foo\\\"bar\"";
 
     check_literal_value(string_to_test,
-                        LiteralValue::String(string_to_test.to_string()));
+                        LiteralValue::String("foo\"bar".to_string()));
 }
 
 #[test]
