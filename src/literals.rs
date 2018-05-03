@@ -168,6 +168,28 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
     while let Some((idx, item)) = chars.next() {
         if escaped {
             match item {
+                'b' => unescaped_string.push(0x08 as char),
+                't' => unescaped_string.push(0x09 as char),
+                'n' => unescaped_string.push(0x0a as char),
+                'v' => unescaped_string.push(0x0b as char),
+                'f' => unescaped_string.push(0x0c as char),
+                'r' => unescaped_string.push(0x0d as char),
+                '"' => unescaped_string.push(0x22 as char),
+                '\'' => unescaped_string.push(0x27 as char),
+                '\\' => unescaped_string.push(0x5c as char),
+                'x' => {
+                    let digits: String = match (chars.next(), chars.next()) {
+                        (Some((_, c0)), Some((_, c1))) => vec![c0, c1].iter().collect(),
+                        (_, None) => return IResult::Incomplete(nom::Needed::Unknown),
+                        (None, Some(_)) => panic!("First call to .next() returned None, but second one did not."),
+                    };
+                    let c = match u8::from_str_radix(&digits, 16) {
+                        Ok(u) => u as char,
+                        // TODO: better error
+                        _ => return error,
+                    };
+                    unescaped_string.push(c);
+                },
                 'u' => {
                     // https://www.ecma-international.org/ecma-262/7.0/index.html#prod-UnicodeEscapeSequence
                     let digits: String = match chars.next() {
@@ -176,7 +198,7 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
                             let c1 = chars.next(); let c2 = chars.next();
                             match chars.next() {
                                 Some((_, c3)) => vec![c0, c1.unwrap().1, c2.unwrap().1, c3].iter().collect(), // These unwraps can't panic
-                                None => return error,
+                                None => return IResult::Incomplete(nom::Needed::Unknown),
                             }
                         },
                         None => return error,
