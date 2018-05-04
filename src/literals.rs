@@ -1,4 +1,3 @@
-use std::str;
 use nom::{self, IResult, digit, Slice};
 use misc::{StrSpan, Location};
 
@@ -149,7 +148,8 @@ named!(pub literal< StrSpan, Literal >, es_parse!({
 // ==================================================================
 
 /// Returns a whole string (with its delimiters), escaping the backslashes
-fn eat_string(located_span: StrSpan) -> IResult< StrSpan, &str > {
+fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
+    let error = nom::IResult::Error(error_position!(es_error!(InvalidString), string));
     let string = located_span.fragment;
     if string.len() == 0 {
         return IResult::Incomplete(nom::Needed::Unknown);
@@ -159,19 +159,71 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, &str > {
     let separator = match chars.nth(0) {
         Some((_, sep)) if (sep == '"' || sep == '\'') => sep,
         // FIXME meaningfull error codes
-        Some(_) | None => return nom::IResult::Error(error_position!(es_error!(InvalidString), string))
+        Some(_) | None => return error
     };
 
     let mut escaped = false;
-    for (idx, item) in chars {
+    let mut unescaped_string = String::new();
+
+    while let Some((idx, item)) = chars.next() {
         if escaped {
+            match item {
+                'b' => unescaped_string.push(0x08 as char),
+                't' => unescaped_string.push(0x09 as char),
+                'n' => unescaped_string.push(0x0a as char),
+                'v' => unescaped_string.push(0x0b as char),
+                'f' => unescaped_string.push(0x0c as char),
+                'r' => unescaped_string.push(0x0d as char),
+                '"' => unescaped_string.push(0x22 as char),
+                '\'' => unescaped_string.push(0x27 as char),
+                '\\' => unescaped_string.push(0x5c as char),
+                'x' => {
+                    let digits: String = match (chars.next(), chars.next()) {
+                        (Some((_, c0)), Some((_, c1))) => vec![c0, c1].iter().collect(),
+                        (_, None) => return IResult::Incomplete(nom::Needed::Unknown),
+                        (None, Some(_)) => panic!("First call to .next() returned None, but second one did not."),
+                    };
+                    let c = match u8::from_str_radix(&digits, 16) {
+                        Ok(u) => u as char,
+                        // TODO: better error
+                        _ => return error,
+                    };
+                    unescaped_string.push(c);
+                },
+                'u' => {
+                    // https://www.ecma-international.org/ecma-262/7.0/index.html#prod-UnicodeEscapeSequence
+                    let digits: String = match chars.next() {
+                        Some((_, c0)) if c0 == '{' => chars.by_ref().take_while(|&(_, c)| c != '}').map(|(_, c)| c).collect(),
+                        Some((_, c0)) => {
+                            let c1 = chars.next(); let c2 = chars.next();
+                            match chars.next() {
+                                Some((_, c3)) => vec![c0, c1.unwrap().1, c2.unwrap().1, c3].iter().collect(), // These unwraps can't panic
+                                None => return IResult::Incomplete(nom::Needed::Unknown),
+                            }
+                        },
+                        None => return error,
+                    };
+                    let c = match u32::from_str_radix(&digits, 16) {
+                        Ok(u) if u <= 1114111 => {
+                            match ::std::char::from_u32(u) {
+                                Some(c) => c,
+                                None => return error,
+                            }
+                        },
+                        // TODO: better error
+                        _ => return error,
+                    };
+                    unescaped_string.push(c);
+                },
+                _ => unescaped_string.push(item),
+            };
             escaped = false;
         } else {
             match item {
-                c if c == separator => return IResult::Done(located_span.slice(idx+1..), string.slice(0..idx+1)),
+                c if c == separator => return IResult::Done(located_span.slice(idx+1..), unescaped_string),
                 '\\' => escaped = true,
                 '\n' => return IResult::Incomplete(nom::Needed::Unknown),
-                _ => ()
+                _ => unescaped_string.push(item),
             }
         }
     }

@@ -116,8 +116,8 @@ fn it_fails_to_parse_invalid_hexadecimal_numbers() {
 
 #[test]
 fn it_parses_string() {
-    check_literal_value("\"foo\"", LiteralValue::String("\"foo\"".to_string()));
-    check_literal_value("'foo'", LiteralValue::String("'foo'".to_string()));
+    check_literal_value("\"foo\"", LiteralValue::String("foo".to_string()));
+    check_literal_value("'foo'", LiteralValue::String("foo".to_string()));
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn it_parses_non_standard_multi_line_string() {
     let string_to_test = "\"foo$\\\n bar\"";
 
     check_literal_value(string_to_test,
-                        LiteralValue::String(string_to_test.to_string()));
+                        LiteralValue::String("foo$\n bar".to_string()));
 }
 
 #[test]
@@ -133,7 +133,23 @@ fn it_parses_strings_with_escaped_quotes() {
     let string_to_test = "\"foo\\\"bar\"";
 
     check_literal_value(string_to_test,
-                        LiteralValue::String(string_to_test.to_string()));
+                        LiteralValue::String("foo\"bar".to_string()));
+}
+
+#[test]
+fn it_parses_strings_with_hex() {
+    check_literal_value("\"foo\\x20bar\"",
+                        LiteralValue::String("foo bar".to_string()));
+}
+
+#[test]
+fn it_parses_strings_with_escaped_codepoint() {
+    check_literal_value("\"foo\\u0020bar\"",
+                        LiteralValue::String("foo bar".to_string()));
+    check_literal_value("\"foo\\u{20}bar\"",
+                        LiteralValue::String("foo bar".to_string()));
+    check_literal_value("\"foo\\u{000000000000020}bar\"",
+                        LiteralValue::String("foo bar".to_string()));
 }
 
 #[test]
