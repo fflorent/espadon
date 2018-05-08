@@ -29,7 +29,8 @@ pub enum LiteralValue {
     Null,
     Number(f64),
     String(String),
-    Boolean(bool)
+    Boolean(bool),
+    Regexp { pattern: String, flags: Vec<char> },
 }
 
 /// [A literal expression]
@@ -127,13 +128,31 @@ named!(string_literal_value< StrSpan, LiteralValue >, do_parse!(
     string: call!(eat_string) >>
     (LiteralValue::String(string.to_string()))
 ));
+named!(regexp_char< StrSpan, String >, alt!(
+    none_of!("\\/") => { |c: char| c.to_string() } |
+    preceded!(char!('\\'), take!(1)) => { |c: StrSpan|
+        if c.to_string() == "\\" { c.to_string() } else { "\\".to_string() + &c.to_string() }
+    }
+));
+
+
+/// regexp literal value parser
+named!(regexp_literal_value< StrSpan, LiteralValue >, do_parse!(
+    body: delimited!(char!('/'), many1!(regexp_char), char!('/')) >>
+    flags: many0!(one_of!("abcdefghijklmnopqrstuvwxyz")) >> // FIXME: be closer to the spec
+    (LiteralValue::Regexp {
+        pattern: body.join(""),
+        flags: flags,
+    })
+));
 
 /// generic literal value parser
 named!(literal_value< StrSpan, LiteralValue >, alt_complete!(
     number_literal_value |
     null_literal_value |
     boolean_literal_value |
-    string_literal_value
+    string_literal_value |
+    regexp_literal_value
 ));
 
 /// Literal parser
