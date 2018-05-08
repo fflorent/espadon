@@ -163,3 +163,9 @@ fn it_parses_boolean() {
     check_literal_value("true", LiteralValue::Boolean(true));
     check_literal_value("false", LiteralValue::Boolean(false));
 }
+
+#[test]
+fn it_parses_regexp() {
+    check_literal_value("/foo/", LiteralValue::Regexp { pattern: "foo".to_string(), flags: vec![] });
+    check_literal_value("/foo/bar", LiteralValue::Regexp { pattern: "foo".to_string(), flags: vec!['b', 'a', 'r'] });
+}
