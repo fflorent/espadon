@@ -40,6 +40,10 @@ pub struct Literal<'a> {
     pub loc: Location<'a>
 }
 
+/// https://www.ecma-international.org/ecma-262/7.0/index.html#prod-LineTerminator
+const LINE_TERMINATORS: &'static str = "\n\r\u{2028}\u{2029}";
+// equivalent to: "\u{000a}\u{000d}\u{2028}\u{2029}";
+
 /// null literal value parser
 /// https://www.ecma-international.org/ecma-262/7.0/index.html#prod-NullLiteral
 named!(null_literal_value< StrSpan, LiteralValue >, do_parse!(
@@ -146,7 +150,7 @@ named!(regexp_literal_value< StrSpan, LiteralValue >, do_parse!(
 ));
 
 /// generic literal value parser
-named!(literal_value< StrSpan, LiteralValue >, alt_complete!(
+named!(literal_value< StrSpan, LiteralValue >, alt!(
     number_literal_value |
     null_literal_value |
     boolean_literal_value |
@@ -182,11 +186,21 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
     };
 
     let mut escaped = false;
+    let mut ignore_next_char_if_linefeed = false;
     let mut unescaped_string = String::new();
 
     while let Some((idx, item)) = chars.next() {
+        if ignore_next_char_if_linefeed && item == '\n' {
+            ignore_next_char_if_linefeed = false;
+            continue;
+        }
         if escaped {
             match item {
+                // https://www.ecma-international.org/ecma-262/7.0/index.html#prod-LineContinuation
+                '\r' => ignore_next_char_if_linefeed = true,
+                c if LINE_TERMINATORS.contains(c) => {},
+
+                // https://www.ecma-international.org/ecma-262/7.0/index.html#prod-SingleEscapeCharacter
                 'b' => unescaped_string.push(0x08 as char),
                 't' => unescaped_string.push(0x09 as char),
                 'n' => unescaped_string.push(0x0a as char),
@@ -196,6 +210,8 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
                 '"' => unescaped_string.push(0x22 as char),
                 '\'' => unescaped_string.push(0x27 as char),
                 '\\' => unescaped_string.push(0x5c as char),
+
+                // https://www.ecma-international.org/ecma-262/7.0/index.html#prod-HexEscapeSequence
                 'x' => {
                     let digits: String = match (chars.next(), chars.next()) {
                         (Some((_, c0)), Some((_, c1))) => vec![c0, c1].iter().collect(),
@@ -209,8 +225,9 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
                     };
                     unescaped_string.push(c);
                 },
+
+                // https://www.ecma-international.org/ecma-262/7.0/index.html#prod-UnicodeEscapeSequence
                 'u' => {
-                    // https://www.ecma-international.org/ecma-262/7.0/index.html#prod-UnicodeEscapeSequence
                     let digits: String = match chars.next() {
                         Some((_, c0)) if c0 == '{' => chars.by_ref().take_while(|&(_, c)| c != '}').map(|(_, c)| c).collect(),
                         Some((_, c0)) => {
@@ -241,7 +258,7 @@ fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
             match item {
                 c if c == separator => return IResult::Done(located_span.slice(idx+1..), unescaped_string),
                 '\\' => escaped = true,
-                '\n' => return IResult::Incomplete(nom::Needed::Unknown),
+                c if LINE_TERMINATORS.contains(c) => return IResult::Incomplete(nom::Needed::Unknown),
                 _ => unescaped_string.push(item),
             }
         }

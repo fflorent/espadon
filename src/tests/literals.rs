@@ -121,14 +121,6 @@ fn it_parses_string() {
 }
 
 #[test]
-fn it_parses_non_standard_multi_line_string() {
-    let string_to_test = "\"foo$\\\n bar\"";
-
-    check_literal_value(string_to_test,
-                        LiteralValue::String("foo$\n bar".to_string()));
-}
-
-#[test]
 fn it_parses_strings_with_escaped_quotes() {
     let string_to_test = "\"foo\\\"bar\"";
 
@@ -154,8 +146,16 @@ fn it_parses_strings_with_escaped_codepoint() {
 
 #[test]
 fn it_parses_incomplete_string() {
-    check_incomplete_literal("\"foo   \r\n bar\";", Needed::Unknown);
-    check_incomplete_literal("\"foo   \n bar\";", Needed::Unknown);
+    check_incomplete_literal("\"foo   \r\n bar\"", Needed::Unknown);
+    check_incomplete_literal("\"foo   \n bar\"", Needed::Unknown);
+}
+
+#[test]
+fn it_parses_linecontinuation() {
+    check_literal_value("\"foo   \\\r\n bar\"",
+                        LiteralValue::String("foo    bar".to_string()));
+    check_literal_value("\"foo   \\\n bar\"",
+                        LiteralValue::String("foo    bar".to_string()));
 }
 
 #[test]
