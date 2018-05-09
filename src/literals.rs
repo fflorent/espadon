@@ -168,8 +168,8 @@ named!(pub literal< StrSpan, Literal >, es_parse!({
 
 /// Returns a whole string (with its delimiters), escaping the backslashes
 fn eat_string(located_span: StrSpan) -> IResult< StrSpan, String > {
-    let error = nom::IResult::Error(error_position!(es_error!(InvalidString), string));
     let string = located_span.fragment;
+    let error = nom::IResult::Error(error_position!(es_error!(InvalidString), string));
     if string.len() == 0 {
         return IResult::Incomplete(nom::Needed::Unknown);
     }
